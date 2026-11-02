@@ -16,7 +16,7 @@ import { useEffect, useRef } from "react";
 // they spread it's weak and wide, so the zoom varies across a light and fades out
 // smoothly. Bumps are averaged per light and lights combine as 1 - (1 - F1)(1 - F2)...,
 // which keeps it in check: simulated on random shapes, a light's strongest spot zooms
-// 1.15-1.45x, the rims squeeze at most ~1.25x, and it never folds over, even where two
+// 1.1-1.3x, the rims squeeze at most ~1.2x, and it never folds over, even where two
 // lights overlap.
 //
 // One WebGL shader draws it all, including the dots' overlay blend, so it replaces the
@@ -38,7 +38,7 @@ const PER_LIGHT = 5; // ellipses per light
 const DRIFT = 0.08; // how far each ellipse wanders, in light radii
 const BREATH = 0.08; // how much each ellipse grows and shrinks
 const LENS_SIGMA = 0.28; // width of each lens bump, in light radii (smaller = tighter zoom area)
-const LENS_K = 0.16 * LENS_SIGMA ** 2; // lens strength, in light radii (limits above; zoom scales with the 0.16)
+const LENS_K = 0.11 * LENS_SIGMA ** 2; // lens strength, in light radii (limits above; zoom scales with the 0.11)
 
 // Offsets and radii in light radii, angles in radians.
 type Ellipse = { x: number; y: number; rx: number; ry: number; angle: number; phase: number };
