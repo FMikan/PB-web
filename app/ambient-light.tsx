@@ -7,9 +7,9 @@ import { useEffect, useRef } from "react";
 // them as if a lens were sliding over it.
 //
 // Lights: each enters at a random spot beyond the screen edge, crosses the middle area
-// on a random heading and leaves at another random spot; the next one sets off while
-// the current one is still on screen. A light is 5 overlapping soft ellipses, a new
-// random set each time, that drift and breathe as it travels.
+// on a random heading and leaves at another random spot. There is only ever one: PAUSE
+// after it has left the screen, the next one comes in. A light is 5 overlapping soft
+// ellipses, a new random set each time, that drift and breathe as it travels.
 //
 // Lens: every ellipse also carries a soft gaussian bump, and the dots are sampled at
 // p + K * gradient(bumps). Where a light's ellipses cluster the bulge is strong, where
@@ -30,10 +30,10 @@ const BG = [0x12, 0x13, 0x24]; // --background in globals.css
 // the same lift, this one about 2.5 times as much so it reads more.
 const COLOR = [0x42, 0x41, 0x6c];
 const SPEED: [number, number] = [10, 14.5]; // vmax per second
-// A light is on screen from roughly 15% to 85% of its pass; the next one sets off when
-// the newest is this far through, so they always overlap.
-const HANDOFF: [number, number] = [0.45, 0.6];
-const MAX_LIGHTS = 4;
+// From the moment a light's shape stops touching the screen to the moment the next
+// one's starts to, in ms.
+const PAUSE = 2000;
+const MAX_LIGHTS = 1; // one light at a time
 const PER_LIGHT = 5; // ellipses per light
 const DRIFT = 0.08; // how far each ellipse wanders, in light radii
 const BREATH = 0.08; // how much each ellipse grows and shrinks
@@ -42,7 +42,8 @@ const LENS_K = 0.11 * LENS_SIGMA ** 2; // lens strength, in light radii (limits 
 
 // Offsets and radii in light radii, angles in radians.
 type Ellipse = { x: number; y: number; rx: number; ry: number; angle: number; phase: number };
-type Light = { from: number[]; to: number[]; t0: number; duration: number; turn: number[]; shape: Ellipse[]; handoff: number };
+// enter / leave: progress (0..1) at which its shape starts / stops touching the screen.
+type Light = { from: number[]; to: number[]; t0: number; duration: number; turn: number[]; shape: Ellipse[]; enter: number; leave: number };
 // On screen, in CSS px.
 type Placed = { x: number; y: number; rx: number; ry: number; angle: number };
 
@@ -83,15 +84,64 @@ function makeLight(now: number, w: number, h: number, startAt = 0): Light {
   const ahead = toEdge(px, py, dx, dy, w, h, r);
   const duration = ((back + ahead) / vmax / rand(...SPEED)) * 1000;
   const turn = rand(0, 360);
-  return {
-    from: [px - dx * back, py - dy * back],
-    to: [px + dx * ahead, py + dy * ahead],
-    t0: now - duration * startAt,
-    duration,
-    turn: [turn, turn + rand(-35, 35)],
-    shape: makeShape(),
-    handoff: rand(...HANDOFF),
+  const shape = makeShape();
+  const from = [px - dx * back, py - dy * back];
+  const to = [px + dx * ahead, py + dy * ahead];
+
+  const light: Light = { from, to, t0: now - duration * startAt, duration, turn: [turn, turn + rand(-35, 35)], shape, enter: 0, leave: 1 };
+
+  // First moment, scanning from `start` toward `end`, that the shape touches the screen:
+  // coarse steps to find it, then bisection to pin it down.
+  const find = (start: number, end: number) => {
+    let off = start;
+    for (let i = 1; i <= 60; i++) {
+      let on = start + ((end - start) * i) / 60;
+      if (!touching(light, on, w, h, r)) {
+        off = on;
+        continue;
+      }
+      for (let j = 0; j < 20; j++) {
+        const m = (off + on) / 2;
+        if (touching(light, m, w, h, r)) on = m;
+        else off = m;
+      }
+      return on;
+    }
+    return end;
   };
+  light.enter = find(0, 1);
+  light.leave = find(1, 0);
+  return light;
+}
+
+// Whether any of the light's ellipses, exactly where they are at progress t (with drift,
+// breath and turn), overlaps the screen: its center is on screen, or one of the screen's
+// edges passes through it.
+function touching(l: Light, t: number, w: number, h: number, r: number) {
+  const corners = [
+    [0, 0],
+    [w, 0],
+    [w, h],
+    [0, h],
+  ];
+  return place(l, l.t0 + t * l.duration, r).some((e) => {
+    if (e.x >= 0 && e.x <= w && e.y >= 0 && e.y <= h) return true;
+    const c = Math.cos(e.angle);
+    const s = Math.sin(e.angle);
+    // Into the ellipse's own space (unrotated, radii 1), where inside means length < 1.
+    // That map is affine, so along an edge the point moves in a straight line and the
+    // closest approach to the center has a closed form.
+    const q = (x: number, y: number) => [(c * (x - e.x) + s * (y - e.y)) / e.rx, (-s * (x - e.x) + c * (y - e.y)) / e.ry];
+    return corners.some(([ax, ay], i) => {
+      const [bx, by] = corners[(i + 1) % 4];
+      const [x0, y0] = q(ax, ay);
+      const [x1, y1] = q(bx, by);
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const k = Math.min(Math.max(-(x0 * dx + y0 * dy) / (dx * dx + dy * dy), 0), 1);
+      return (x0 + k * dx) ** 2 + (y0 + k * dy) ** 2 < 1;
+    });
+  });
 }
 
 const progress = (l: Light, now: number) => Math.min(Math.max((now - l.t0) / l.duration, 0), 1);
@@ -312,21 +362,29 @@ export default function AmbientLight() {
           const shape = makeShape();
           onResize = () => {
             const mid = [box.clientWidth / 2, box.clientHeight / 2];
-            render([{ from: mid, to: mid, t0: 0, duration: 1, turn: [0, 0], shape, handoff: 1 }], 0);
+            render([{ from: mid, to: mid, t0: 0, duration: 1, turn: [0, 0], shape, enter: 0, leave: 1 }], 0);
           };
           onResize();
           window.addEventListener("resize", onResize);
         } else {
-          let lights: Light[] = [];
+          // Only ever one light. The next is made once the current one has left the
+          // screen, so even a resize can't put two on screen at once.
+          let light: Light | undefined;
           const tick = (now: number) => {
-            lights = lights.filter((l) => progress(l, now) < 1);
-            const newest = lights[lights.length - 1];
-            // The first light (and one after a long pause, e.g. a hidden tab) starts
-            // mid-screen; the rest come in from off screen.
-            if (!newest) lights.push(makeLight(now, box.clientWidth, box.clientHeight, rand(0.3, 0.45)));
-            else if (lights.length < MAX_LIGHTS && progress(newest, now) >= newest.handoff)
-              lights.push(makeLight(now, box.clientWidth, box.clientHeight));
-            render(lights, now);
+            const w = box.clientWidth;
+            const h = box.clientHeight;
+            // The first light (and one after a long break, e.g. a hidden tab) starts
+            // mid-screen.
+            if (!light || progress(light, now) >= 1) light = makeLight(now, w, h, rand(0.3, 0.45));
+            // Gone from the screen: the next one takes over. It waits off screen at its
+            // start, timed off the moment the last one left, and its shape reaches the
+            // screen PAUSE after that.
+            else if (progress(light, now) >= light.leave) {
+              const next = makeLight(now, w, h);
+              next.t0 = light.t0 + light.leave * light.duration + PAUSE - next.enter * next.duration;
+              light = next;
+            }
+            render([light], now);
             frame = requestAnimationFrame(tick);
           };
           frame = requestAnimationFrame(tick);
