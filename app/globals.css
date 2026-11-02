@@ -12,12 +12,23 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* Dot texture: one 6px tile of docs/img/PB_Dots_Overlay (2).png, blended onto the
-   color in overlay mode like in the design file (its 50% gray leaves the color as is). */
 body {
-  background: url(/dots.png) var(--background);
-  background-blend-mode: overlay;
+  background: var(--background);
   color: var(--foreground);
+}
+
+/* Dot texture: one 6px tile of docs/img/PB_Dots_Overlay (2).png, blended in overlay
+   mode like in the design file (its 50% gray leaves what's under it as is). Its own
+   layer, above the drifting light (app/ambient-light.tsx, z-index -2), so the light
+   gets the texture too. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url(/dots.png);
+  mix-blend-mode: overlay;
+  pointer-events: none;
 }
 
 /* Loading screen, colors and timing taken from the rockstargames.com/VI loader:
@@ -108,3 +119,54 @@ body {
   42% { opacity: 1; }
 }
 
+
+/* Cursor: the logo's bullet, hotspot at its tip. */
+html, a, button {
+  cursor: url(/cursor.svg) 2 2, auto;
+}
+
+/* Intro after the loader: app/loader.tsx sets data-loaded on <html> as the loader
+   starts to leave. Until then everything sits at its final state under the opaque
+   loader, so without JS the page simply shows. Delays start at 0.5s, when the
+   loader backdrop begins to fade. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-loaded] body > header > * {
+    animation: intro-down 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both;
+  }
+  [data-loaded] body > header > :last-child {
+    animation-delay: 0.6s;
+  }
+
+  /* Header SVG parts; fill-box makes the % in the keyframe each part's own height. */
+  [data-loaded] :is(.experience, .high-end-creation, .content-marketing) {
+    transform-box: fill-box;
+    animation: intro-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
+  }
+  [data-loaded] .high-end-creation {
+    animation-delay: 0.7s;
+  }
+  [data-loaded] .content-marketing {
+    animation-delay: 0.8s;
+  }
+
+  /* The swoosh is a filled shape, not a stroke, so a stroke along its centerline
+     (the mask in public/web-header.svg) is drawn instead and uncovers it as it goes:
+     left to right, then back along the hook. pathLength="1" makes the dash 1. */
+  [data-loaded] .swoosh-pen {
+    stroke-dasharray: 1;
+    animation: intro-draw 1.1s cubic-bezier(0.65, 0, 0.35, 1) 1.2s both;
+  }
+}
+
+@keyframes intro-down {
+  from { opacity: 0; transform: translateY(-16px); }
+}
+
+@keyframes intro-up {
+  from { opacity: 0; transform: translateY(40%); }
+}
+
+@keyframes intro-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}

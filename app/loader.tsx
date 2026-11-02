@@ -17,7 +17,10 @@ export default function Loader() {
     const done = () => {
       const t = Number(logo.current?.getAnimations({ subtree: true })[0]?.currentTime ?? 0);
       const wait = Math.max(MIN_CYCLES * CYCLE - t, CYCLE - (t % CYCLE));
-      timer = window.setTimeout(() => setLeaving(true), wait);
+      timer = window.setTimeout(() => {
+        document.documentElement.dataset.loaded = ""; // starts the intro in globals.css
+        setLeaving(true);
+      }, wait);
     };
     if (document.readyState === "complete") done();
     else window.addEventListener("load", done, { once: true });
