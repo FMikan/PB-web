@@ -49,7 +49,7 @@ body {
 /* Shape, blur, timings and curves follow the rockstargames.com/VI loader. */
 .loader-logo {
   position: relative;
-  width: clamp(118px, 14vw, 266px);
+  width: clamp(94px, 11.2vw, 213px);
   aspect-ratio: 434.94 / 163.47;
   background: #1a1a1a;
   mask: url(/logo-outline.svg) center / 100% 100% no-repeat;
