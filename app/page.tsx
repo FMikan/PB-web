@@ -7,15 +7,23 @@ export default function Home() {
   // Read here, not at module level, so dev picks up edits to the file on reload.
   const header = readFileSync(join(process.cwd(), "public/web-header.svg"), "utf8");
   return (
-    <main className="flex flex-1 flex-col px-4 py-6 md:px-14 md:pt-5">
-      <div className="[&>svg]:h-auto [&>svg]:mx-auto [&>svg]:w-1/2" dangerouslySetInnerHTML={{ __html: header }} />
-      {/* Fills what's left of the screen; the 16:9 box takes the largest size that fits it.
-          The absolute inner layer is the size container: Chrome leaves cqh at 0 on a
-          container whose height only comes from flex. */}
-      {/* Phones: gap = 4% of the header SVG's height. % margins resolve against the width:
-          SVG height = 50% of width * 499/2940 (its viewBox), so 4% of it = 0.34% of width.
-          md+: 24px, the same as the gap under the box (py-6). */}
-      <div className="relative mt-[0.34%] min-h-48 flex-1 md:mt-6">
+    // Phones: header text full width, right above the VSL, the pair sitting a little above
+    // the middle (the free space splits 1:3 above and below). md+: header at the top, the
+    // VSL filling what's left under it.
+    <main className="grid flex-1 grid-cols-1 grid-rows-[1fr_auto_auto_3fr] px-4 py-6 md:flex md:flex-col md:px-14 md:pt-5">
+      <div
+        className="row-start-2 [&>svg]:mx-auto [&>svg]:h-auto [&>svg]:w-full md:[&>svg]:w-1/2"
+        dangerouslySetInnerHTML={{ __html: header }}
+      />
+      {/* md+: fills what's left of the screen and the 16:9 box takes the largest size that
+          fits it. The absolute inner layer is the size container: Chrome leaves cqh at 0 on
+          a container whose height only comes from flex. Phones: just the box's own 16:9.
+          Gap above = 4% of the header SVG's height (md+: 24px, the same as under the box).
+          % margins resolve against the width, and the SVG's height is its width * 499/2940
+          (its viewBox): full width on phones gives 0.68%, half width on md+ would be 0.34%.
+          Phones: the box is then nudged down 8svh with a transform, which leaves the layout
+          and so the header's spot as they are. */}
+      <div className="relative row-start-3 mt-[0.68%] aspect-video translate-y-[8svh] md:mt-6 md:aspect-auto md:min-h-48 md:flex-1 md:translate-y-0">
         <div className="absolute inset-0 [container-type:size]">
           {/* VSL placeholder. Border uses the loader shine gradient, like "Experience";
               the fill is the same gradient at low opacity over the page background. */}
@@ -29,6 +37,12 @@ export default function Home() {
             <span className="text-[clamp(1.5rem,min(5.625cqw,10cqh),6rem)] font-bold italic">VSL</span>
           </div>
         </div>
+      </div>
+      {/* Phones: a small scroll hint at the bottom of the hero (globals.css .scroll-notice).
+          The left padding evens out the letter-spacing after the last letter. */}
+      <div aria-hidden className="scroll-notice row-start-4 flex flex-col items-center gap-2 self-end justify-self-center md:hidden">
+        <span className="pl-[0.3em] text-xs tracking-[0.3em] text-white/60 uppercase">Scroll</span>
+        <span className="scroll-notice-line" />
       </div>
     </main>
   );

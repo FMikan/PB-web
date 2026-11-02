@@ -32,7 +32,7 @@ const COLOR = [0x42, 0x41, 0x6c];
 const SPEED: [number, number] = [10, 14.5]; // vmax per second
 // From the moment a light's shape stops touching the screen to the moment the next
 // one's starts to, in ms.
-const PAUSE = 2000;
+const PAUSE = 500;
 const MAX_LIGHTS = 1; // one light at a time
 const PER_LIGHT = 5; // ellipses per light
 const DRIFT = 0.08; // how far each ellipse wanders, in light radii
