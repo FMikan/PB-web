@@ -12,8 +12,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Dot texture: one 6px tile of docs/img/PB_Dots_Overlay (2).png, blended onto the
+   color in overlay mode like in the design file (its 50% gray leaves the color as is). */
 body {
-  background: var(--background);
+  background: url(/dots.png) var(--background);
+  background-blend-mode: overlay;
   color: var(--foreground);
 }
 
