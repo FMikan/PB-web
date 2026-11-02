@@ -48,6 +48,13 @@ body {
   transition: opacity 0.5s ease;
 }
 
+/* Phones: 15% larger than the 94px minimum. */
+@media (max-width: 47.99rem) {
+  .loader-logo {
+    width: 108px;
+  }
+}
+
 /* The glow: the logo darkened to #212121, with a halo that pulses. It sits
    under the outline, which covers the logo itself, so only the halo shows. */
 .loader-logo::before {
