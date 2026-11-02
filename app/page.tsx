@@ -20,7 +20,7 @@ export default function Home() {
           {/* VSL placeholder. Border uses the loader shine gradient, like "Experience";
               the fill is the same gradient at low opacity over the page background. */}
           <div
-            className="mx-auto flex aspect-video w-[min(100cqw,100cqh*16/9)] items-center justify-center rounded-3xl border-2 border-transparent"
+            className="vsl-box mx-auto flex aspect-video w-[min(100cqw,100cqh*16/9)] items-center justify-center rounded-3xl border-2 border-transparent"
             style={{
               background:
                 "linear-gradient(232deg, rgb(255 178 198 / 0.14) 20%, rgb(152 139 208 / 0.14) 70%) padding-box, linear-gradient(var(--background), var(--background)) padding-box, linear-gradient(232deg, #ffb2c6 20%, #988bd0 70%) border-box",
