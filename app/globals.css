@@ -20,7 +20,8 @@ body {
 /* Dot texture: one 6px tile of docs/img/PB_Dots_Overlay (2).png, blended in overlay
    mode like in the design file (its 50% gray leaves what's under it as is). Its own
    layer, above the drifting light (app/ambient-light.tsx, z-index -2), so the light
-   gets the texture too. */
+   gets the texture too. Once that runs on WebGL ([data-gl]) it draws the dots itself,
+   magnified under the lights, so this layer steps aside. */
 body::before {
   content: "";
   position: fixed;
@@ -29,6 +30,10 @@ body::before {
   background: url(/dots.png);
   mix-blend-mode: overlay;
   pointer-events: none;
+}
+
+[data-gl] body::before {
+  display: none;
 }
 
 /* Loading screen, colors and timing taken from the rockstargames.com/VI loader:

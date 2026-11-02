@@ -2,134 +2,351 @@
 
 import { useEffect, useRef } from "react";
 
-// A lamp-like light drifting across the page background: the pointer light from
-// rockstargames.com/VI, but moving on its own. Each pass enters from beyond a random
-// corner, crosses to the opposite one and leaves; then the next pass starts. Its shape
-// is a few overlapping soft ellipses, a new random set every pass, that drift while it
-// travels so the outline keeps changing. They're drawn into a small canvas that CSS
-// scales up: a glow has no detail to lose, and it stays cheap on the GPU.
+// Lamp-like lights drifting across the page background (the pointer light from
+// rockstargames.com/VI, but moving on their own), with the dot texture magnified under
+// them as if a lens were sliding over it.
+//
+// Lights: each enters at a random spot beyond the screen edge, crosses the middle area
+// on a random heading and leaves at another random spot; the next one sets off while
+// the current one is still on screen. A light is 5 overlapping soft ellipses, a new
+// random set each time, that drift and breathe as it travels.
+//
+// Lens: every ellipse also carries a soft gaussian bump, and the dots are sampled at
+// p + K * gradient(bumps). Where a light's ellipses cluster the bulge is strong, where
+// they spread it's weak and wide, so the zoom varies across a light and fades out
+// smoothly. Bumps are averaged per light and lights combine as 1 - (1 - F1)(1 - F2)...,
+// which keeps it in check: simulated on random shapes, a light's strongest spot zooms
+// 1.3-1.8x, the rims squeeze at most ~1.4x, and it never folds over, even where two
+// lights overlap.
+//
+// One WebGL shader draws it all, including the dots' overlay blend, so it replaces the
+// CSS dots layer (globals.css hides that once [data-gl] is set). Without WebGL the
+// lights go on a 2D canvas under the CSS dots instead, without the lens.
 
-const SIZE = 150; // vmax; theirs is 2160px on a 1440px-wide screen
+const SIZE = 150; // light diameter, vmax; theirs is 2160px on a 1440px-wide screen
 const OPACITY = 0.5; // same as theirs
-// Theirs is #1f1f38 at 50% over #0c0d1b; #252540 gives our #121324 the same lift.
-const COLOR = "37, 37, 64";
-const PX = 256; // canvas resolution
-const DURATION: [number, number] = [18000, 26000]; // ms per pass
-// Passes start and end with the light's center this far past the corner on both axes.
-// That puts its farthest edge (SIZE / 2 from the center) right at the corner: fully
-// off screen, without a long dark wait before it shows.
-const OFF = SIZE / 2 / Math.SQRT2;
-
-type Ellipse = { x: number; y: number; rx: number; ry: number; angle: number; phase: number };
-
-const DRIFT = PX * 0.04; // how far each ellipse wanders during a pass, canvas px
+const BG = [0x12, 0x13, 0x24]; // --background in globals.css
+// Light color. Theirs is #1f1f38 at 50% over #0c0d1b; #252540 would give our background
+// the same lift, this one about 2.5 times as much so it reads more.
+const COLOR = [0x42, 0x41, 0x6c];
+const SPEED: [number, number] = [10, 14.5]; // vmax per second
+// A light is on screen from roughly 15% to 85% of its pass; the next one sets off when
+// the newest is this far through, so they always overlap.
+const HANDOFF: [number, number] = [0.45, 0.6];
+const MAX_LIGHTS = 4;
+const PER_LIGHT = 5; // ellipses per light
+const DRIFT = 0.08; // how far each ellipse wanders, in light radii
 const BREATH = 0.08; // how much each ellipse grows and shrinks
+const LENS_SIGMA = 0.35; // width of each lens bump, in light radii
+const LENS_K = 0.225 * LENS_SIGMA ** 2; // lens strength, in light radii (limits above)
+
+// Offsets and radii in light radii, angles in radians.
+type Ellipse = { x: number; y: number; rx: number; ry: number; angle: number; phase: number };
+type Light = { from: number[]; to: number[]; t0: number; duration: number; turn: number[]; shape: Ellipse[]; handoff: number };
+// On screen, in CSS px.
+type Placed = { x: number; y: number; rx: number; ry: number; angle: number };
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 function makeShape(): Ellipse[] {
-  const r = PX / 2;
-  return Array.from({ length: 5 }, (_, i) => {
+  return Array.from({ length: PER_LIGHT }, (_, i) => {
     // The first ellipse stays near the middle so the light always has a core.
-    const dist = rand(0, i === 0 ? 0.08 : 0.3) * r;
+    const dist = rand(0, i === 0 ? 0.08 : 0.3);
     const dir = rand(0, 2 * Math.PI);
-    // Largest radius that keeps the ellipse inside the canvas at full drift and breath;
-    // past that the canvas edge would cut it with a hard line.
-    const maxR = (r - dist - DRIFT) / (1 + BREATH);
+    // Largest radius that stays within the light's radius at full drift and breath.
+    const maxR = (1 - dist - DRIFT) / (1 + BREATH);
     const rx = rand(0.6, 1) * maxR;
-    return {
-      x: r + Math.cos(dir) * dist,
-      y: r + Math.sin(dir) * dist,
-      rx,
-      ry: rx * rand(0.55, 1),
-      angle: rand(0, Math.PI),
-      phase: rand(0, 2 * Math.PI),
-    };
+    return { x: Math.cos(dir) * dist, y: Math.sin(dir) * dist, rx, ry: rx * rand(0.55, 1), angle: rand(0, Math.PI), phase: rand(0, 2 * Math.PI) };
   });
 }
 
-// progress: 0..1 through the pass.
-function draw(ctx: CanvasRenderingContext2D, shape: Ellipse[], progress: number) {
-  ctx.clearRect(0, 0, PX, PX);
-  for (const e of shape) {
-    const w = progress * 2 * Math.PI + e.phase;
-    const s = 1 + BREATH * Math.sin(w * 1.3);
-    ctx.save();
-    ctx.translate(e.x + Math.cos(w) * DRIFT, e.y + Math.sin(w) * DRIFT);
-    ctx.rotate(e.angle);
-    ctx.scale(e.rx * s, e.ry * s);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    g.addColorStop(0, `rgba(${COLOR}, 1)`);
-    g.addColorStop(1, `rgba(${COLOR}, 0)`);
-    ctx.fillStyle = g;
-    ctx.fillRect(-1, -1, 2, 2);
-    ctx.restore();
-  }
+// Distance along the ray from (x, y) heading (dx, dy) to the edge of the screen grown by
+// r on every side. Past it, a light of radius r no longer touches the screen.
+function toEdge(x: number, y: number, dx: number, dy: number, w: number, h: number, r: number) {
+  const tx = dx > 0 ? (w + r - x) / dx : dx < 0 ? (-r - x) / dx : Infinity;
+  const ty = dy > 0 ? (h + r - y) / dy : dy < 0 ? (-r - y) / dy : Infinity;
+  return Math.min(tx, ty);
 }
 
-// Where the light's center sits for a corner given as 0/1 per axis (0 = left / top).
-function at(cx: number, cy: number) {
-  const x = cx ? `calc(100vw + ${OFF}vmax)` : `${-OFF}vmax`;
-  const y = cy ? `calc(100vh + ${OFF}vmax)` : `${-OFF}vmax`;
-  return `translate(${x}, ${y}) translate(-50%, -50%)`;
+// startAt: how far into its pass the light begins.
+function makeLight(now: number, w: number, h: number, startAt = 0): Light {
+  const vmax = Math.max(w, h) / 100;
+  const r = (SIZE / 2) * vmax;
+  // A random point in the middle of the screen it passes through, and a random heading:
+  // it enters and leaves at random places but always properly crosses the screen.
+  const px = rand(0.2, 0.8) * w;
+  const py = rand(0.2, 0.8) * h;
+  const a = rand(0, 2 * Math.PI);
+  const dx = Math.cos(a);
+  const dy = Math.sin(a);
+  const back = toEdge(px, py, -dx, -dy, w, h, r);
+  const ahead = toEdge(px, py, dx, dy, w, h, r);
+  const duration = ((back + ahead) / vmax / rand(...SPEED)) * 1000;
+  const turn = rand(0, 360);
+  return {
+    from: [px - dx * back, py - dy * back],
+    to: [px + dx * ahead, py + dy * ahead],
+    t0: now - duration * startAt,
+    duration,
+    turn: [turn, turn + rand(-35, 35)],
+    shape: makeShape(),
+    handoff: rand(...HANDOFF),
+  };
+}
+
+const progress = (l: Light, now: number) => Math.min(Math.max((now - l.t0) / l.duration, 0), 1);
+
+// The light's ellipses on screen at time now; r = light radius in px.
+function place(l: Light, now: number, r: number): Placed[] {
+  const t = progress(l, now);
+  const cx = l.from[0] + (l.to[0] - l.from[0]) * t;
+  const cy = l.from[1] + (l.to[1] - l.from[1]) * t;
+  const th = ((l.turn[0] + (l.turn[1] - l.turn[0]) * t) * Math.PI) / 180;
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  return l.shape.map((e) => {
+    const w = t * 2 * Math.PI + e.phase;
+    const b = 1 + BREATH * Math.sin(w * 1.3);
+    const ox = e.x + Math.cos(w) * DRIFT;
+    const oy = e.y + Math.sin(w) * DRIFT;
+    return { x: cx + r * (c * ox - s * oy), y: cy + r * (s * ox + c * oy), rx: e.rx * b * r, ry: e.ry * b * r, angle: th + e.angle };
+  });
+}
+
+const VERTEX = `
+attribute vec2 a;
+void main() { gl_Position = vec4(a, 0.0, 1.0); }`;
+
+const FRAGMENT = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 uRes;
+uniform vec4 uE[${MAX_LIGHTS * PER_LIGHT}]; // ellipse center x, y (px), cos, sin of its angle
+uniform vec2 uAx[${MAX_LIGHTS * PER_LIGHT}]; // 1 / radii (px)
+uniform float uInvSig2; // 1 / lens bump width^2 (px)
+uniform float uK; // lens strength (px^2)
+uniform vec3 uBg;
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform sampler2D uDots; // the 6x6 dot tile
+
+vec3 texel(vec2 i) { return texture2D(uDots, (mod(i, 6.0) + 0.5) / 6.0).rgb; }
+
+// The tile repeated from the top-left corner like the CSS background, read with
+// bilinear filtering so magnified dots stay smooth.
+vec3 dots(vec2 p) {
+  vec2 t = p - 0.5;
+  vec2 i = floor(t);
+  vec2 f = t - i;
+  return mix(mix(texel(i), texel(i + vec2(1.0, 0.0)), f.x), mix(texel(i + vec2(0.0, 1.0)), texel(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
+  float lightKeep = 1.0; // product over lights of (1 - opacity * coverage)
+  float lensKeep = 1.0; // product over lights of (1 - F)
+  vec2 lensSum = vec2(0.0); // sum over lights of grad F / (1 - F)
+  for (int l = 0; l < ${MAX_LIGHTS}; l++) {
+    float keep = 1.0;
+    float F = 0.0;
+    vec2 G = vec2(0.0);
+    for (int j = 0; j < ${PER_LIGHT}; j++) {
+      vec4 e = uE[l * ${PER_LIGHT} + j];
+      vec2 d = p - e.xy;
+      // Same falloff as a canvas radial gradient from the color to transparent.
+      vec2 q = vec2(e.z * d.x + e.w * d.y, -e.w * d.x + e.z * d.y) * uAx[l * ${PER_LIGHT} + j];
+      keep *= 1.0 - max(0.0, 1.0 - length(q));
+      float g = exp(-dot(d, d) * uInvSig2);
+      F += g;
+      G -= 2.0 * uInvSig2 * g * d;
+    }
+    F /= ${PER_LIGHT}.0;
+    G /= ${PER_LIGHT}.0;
+    lightKeep *= 1.0 - uOpacity * (1.0 - keep);
+    lensKeep *= 1.0 - F;
+    lensSum += G / max(1.0 - F, 1e-4);
+  }
+  vec3 lit = mix(uBg, uColor, 1.0 - lightKeep);
+  vec3 s = dots(p + uK * lensKeep * lensSum);
+  // CSS mix-blend-mode: overlay of the dots onto what's under them.
+  gl_FragColor = vec4(mix(2.0 * lit * s, 1.0 - 2.0 * (1.0 - lit) * (1.0 - s), step(0.5, lit)), 1.0);
+}`;
+
+function webglRenderer(canvas: HTMLCanvasElement, tile: HTMLImageElement) {
+  const gl = canvas.getContext("webgl", { alpha: false, antialias: false });
+  if (!gl) return null;
+  const shader = (type: number, src: string) => {
+    const s = gl.createShader(type)!;
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  };
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER, VERTEX));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FRAGMENT));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+  gl.useProgram(prog);
+
+  // One triangle covering the screen.
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tile);
+  for (const [k, v] of [
+    [gl.TEXTURE_MIN_FILTER, gl.NEAREST],
+    [gl.TEXTURE_MAG_FILTER, gl.NEAREST],
+    [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE],
+    [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE],
+  ])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+
+  const u = (name: string) => gl.getUniformLocation(prog, name);
+  gl.uniform3f(u("uBg"), BG[0] / 255, BG[1] / 255, BG[2] / 255);
+  gl.uniform3f(u("uColor"), COLOR[0] / 255, COLOR[1] / 255, COLOR[2] / 255);
+  gl.uniform1f(u("uOpacity"), OPACITY);
+  gl.uniform1i(u("uDots"), 0);
+  const [uRes, uE, uAx, uInvSig2, uK] = ["uRes", "uE", "uAx", "uInvSig2", "uK"].map(u);
+  const E = new Float32Array(MAX_LIGHTS * PER_LIGHT * 4);
+  const AX = new Float32Array(MAX_LIGHTS * PER_LIGHT * 2);
+
+  return (lights: Placed[][], r: number) => {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    gl.viewport(0, 0, w, h);
+    for (let i = 0; i < MAX_LIGHTS * PER_LIGHT; i++) {
+      // Unused slots go far away, where they add nothing.
+      const e = lights[Math.floor(i / PER_LIGHT)]?.[i % PER_LIGHT] ?? { x: -1e5, y: -1e5, rx: 1, ry: 1, angle: 0 };
+      E.set([e.x, e.y, Math.cos(e.angle), Math.sin(e.angle)], i * 4);
+      AX.set([1 / e.rx, 1 / e.ry], i * 2);
+    }
+    gl.uniform2f(uRes, w, h);
+    gl.uniform4fv(uE, E);
+    gl.uniform2fv(uAx, AX);
+    gl.uniform1f(uInvSig2, 1 / (LENS_SIGMA * r) ** 2);
+    gl.uniform1f(uK, LENS_K * r * r);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
+}
+
+// Fallback: lights only, at quarter resolution (a glow loses nothing), under the CSS dots.
+function canvasRenderer(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  const scratch = document.createElement("canvas");
+  const sctx = scratch.getContext("2d");
+  if (!ctx || !sctx) return null;
+  const SCALE = 0.25;
+  return (lights: Placed[][]) => {
+    const w = Math.ceil(canvas.clientWidth * SCALE);
+    const h = Math.ceil(canvas.clientHeight * SCALE);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = scratch.width = w;
+      canvas.height = scratch.height = h;
+    }
+    ctx.clearRect(0, 0, w, h);
+    for (const light of lights) {
+      // Each light's ellipses go on a scratch canvas first so the light's opacity applies
+      // to all of it at once, like a layer.
+      sctx.clearRect(0, 0, w, h);
+      for (const e of light) {
+        sctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+        sctx.translate(e.x, e.y);
+        sctx.rotate(e.angle);
+        sctx.scale(e.rx, e.ry);
+        const g = sctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+        g.addColorStop(0, `rgba(${COLOR}, 1)`);
+        g.addColorStop(1, `rgba(${COLOR}, 0)`);
+        sctx.fillStyle = g;
+        sctx.fillRect(-1, -1, 2, 2);
+      }
+      sctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = OPACITY;
+      ctx.drawImage(scratch, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+  };
 }
 
 export default function AmbientLight() {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const canvas = ref.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      draw(ctx, makeShape(), 0);
-      canvas.style.transform = "translate(50vw, 50vh) translate(-50%, -50%)";
-      return;
-    }
-
-    let anim: Animation | undefined;
+    const box = ref.current;
+    if (!box) return;
+    const root = document.documentElement;
+    const canvas = document.createElement("canvas");
+    Object.assign(canvas.style, { position: "absolute", inset: "0", width: "100%", height: "100%" });
+    box.append(canvas);
     let frame = 0;
+    let stopped = false;
+    let onResize = () => {};
 
-    const pass = () => {
-      const fx = Math.round(Math.random());
-      const fy = Math.round(Math.random());
-      const turn = rand(0, 360);
-      const duration = rand(...DURATION);
-      const shape = makeShape();
-      anim = canvas.animate(
-        [
-          { transform: `${at(fx, fy)} rotate(${turn}deg)` },
-          { transform: `${at(1 - fx, 1 - fy)} rotate(${turn + rand(-35, 35)}deg)` },
-        ],
-        { duration, easing: "linear" },
-      );
-      anim.onfinish = pass;
-      const current = anim;
-      cancelAnimationFrame(frame);
-      const tick = () => {
-        draw(ctx, shape, Math.min(Number(current.currentTime ?? 0) / duration, 1));
-        frame = requestAnimationFrame(tick);
-      };
-      tick();
-    };
-    pass();
+    const tile = new Image();
+    tile.src = "/dots.png";
+    tile
+      .decode()
+      .catch(() => {})
+      .then(() => {
+        if (stopped) return;
+        const gl = tile.naturalWidth ? webglRenderer(canvas, tile) : null;
+        const fallback = gl ? null : canvasRenderer(canvas);
+        const render = (lights: Light[], now: number) => {
+          const r = ((SIZE / 2) * Math.max(box.clientWidth, box.clientHeight)) / 100;
+          const placed = lights.slice(0, MAX_LIGHTS).map((l) => place(l, now, r));
+          if (gl) gl(placed, r);
+          else fallback?.(placed);
+        };
+
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          // One light resting in the middle.
+          const shape = makeShape();
+          onResize = () => {
+            const mid = [box.clientWidth / 2, box.clientHeight / 2];
+            render([{ from: mid, to: mid, t0: 0, duration: 1, turn: [0, 0], shape, handoff: 1 }], 0);
+          };
+          onResize();
+          window.addEventListener("resize", onResize);
+        } else {
+          let lights: Light[] = [];
+          const tick = (now: number) => {
+            lights = lights.filter((l) => progress(l, now) < 1);
+            const newest = lights[lights.length - 1];
+            // The first light (and one after a long pause, e.g. a hidden tab) starts
+            // mid-screen; the rest come in from off screen.
+            if (!newest) lights.push(makeLight(now, box.clientWidth, box.clientHeight, rand(0.3, 0.45)));
+            else if (lights.length < MAX_LIGHTS && progress(newest, now) >= newest.handoff)
+              lights.push(makeLight(now, box.clientWidth, box.clientHeight));
+            render(lights, now);
+            frame = requestAnimationFrame(tick);
+          };
+          frame = requestAnimationFrame(tick);
+        }
+
+        if (gl) {
+          root.dataset.gl = "";
+          // If the GPU drops the context, bring the CSS dots back.
+          canvas.addEventListener("webglcontextlost", () => delete root.dataset.gl);
+        }
+      });
 
     return () => {
-      anim?.cancel();
+      stopped = true;
       cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize);
+      delete root.dataset.gl;
+      canvas.remove();
     };
   }, []);
 
-  return (
-    <canvas
-      ref={ref}
-      width={PX}
-      height={PX}
-      aria-hidden
-      className="pointer-events-none fixed top-0 left-0 -z-2 will-change-transform"
-      // Parked off screen until the first pass starts.
-      style={{ width: `${SIZE}vmax`, height: `${SIZE}vmax`, opacity: OPACITY, transform: "translate(-200vmax, -200vmax)" }}
-    />
-  );
+  return <div ref={ref} aria-hidden className="pointer-events-none fixed inset-0 -z-2" />;
 }
