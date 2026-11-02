@@ -24,16 +24,18 @@ body {
   color: var(--foreground);
 }
 
-/* Loading screen, modeled on rockstargames.com: gray logo outline with a white
-   shine sweeping from the top-left to the bottom-right. One cycle is 2.15s;
-   app/loader.tsx waits for a cycle to finish before fading out. */
+/* Loading screen, colors and timing taken from the rockstargames.com/VI loader:
+   navy backdrop, a dim logo outline that brightens as a pink-to-violet shine
+   sweeps from the top-left to the bottom-right, and a soft glow behind it
+   pulsing in step. One cycle is 2.15s; app/loader.tsx waits for a cycle to
+   finish before fading out. */
 .loader {
   position: fixed;
   inset: 0;
   z-index: 100;
   display: grid;
   place-items: center;
-  background: #000;
+  background: linear-gradient(189deg, #1f1f38 0.55%, #18182d 30.38%, #111222 65.19%, #0c0d1b 100%);
   transition: opacity 0.6s ease 0.5s; /* waits for the logo to fade first */
 }
 
@@ -46,28 +48,43 @@ body {
   opacity: 0;
 }
 
-/* Shape, blur, timings and curves follow the rockstargames.com/VI loader. */
 .loader-logo {
   position: relative;
   width: clamp(94px, 11.2vw, 213px);
   aspect-ratio: 434.94 / 163.47;
-  background: #1a1a1a;
+  transition: opacity 0.5s ease;
+}
+
+/* The glow: the logo darkened to #212121, with a halo that pulses. It sits
+   under the outline, which covers the logo itself, so only the halo shows. */
+.loader-logo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url(/logo-outline.svg) center / 100% 100% no-repeat;
+  filter: brightness(0.13) drop-shadow(0 0 3.66px #38365d);
+  animation: loader-glow 2.15s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite both;
+}
+
+.loader-outline {
+  position: absolute;
+  inset: 0;
+  background: #1f1f38;
   mask: url(/logo-outline.svg) center / 100% 100% no-repeat;
   animation: loader-base 2.15s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite both;
-  transition: opacity 0.5s ease;
 }
 
 /* The shine: a blurred band that skew(-45deg, 45deg) turns into a "/" sweeping
    left to right. Thickness matches the original relative to the logo height;
    it's longer so it spans the wider logo. */
-.loader-logo::after {
+.loader-outline::after {
   content: "";
   position: absolute;
   top: -60%;
   left: -40%;
   width: 9.4%;
   height: 160%;
-  background: linear-gradient(232deg, #fff 20%, rgb(255 255 255 / 0.45) 70%);
+  background: linear-gradient(232deg, #ffb2c6 20%, #988bd0 70%);
   filter: blur(5px);
   transform: skew(-45deg, 45deg);
   animation: loader-shine 2.15s cubic-bezier(0.77, 0, 0.175, 1) infinite both;
@@ -79,6 +96,12 @@ body {
 }
 
 @keyframes loader-base {
-  0%, 22%, 92%, 100% { background-color: #1a1a1a; }
-  42% { background-color: #262626; }
+  0%, 22%, 92%, 100% { background-color: #1f1f38; }
+  42% { background-color: #38365d; }
 }
+
+@keyframes loader-glow {
+  0%, 22%, 92%, 100% { opacity: 0.2; }
+  42% { opacity: 1; }
+}
+

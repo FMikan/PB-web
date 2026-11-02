@@ -15,7 +15,7 @@ export default function Loader() {
     // Once the page has loaded, show at least MIN_CYCLES glints and let the
     // current one finish, then fade out.
     const done = () => {
-      const t = Number(logo.current?.getAnimations()[0]?.currentTime ?? 0);
+      const t = Number(logo.current?.getAnimations({ subtree: true })[0]?.currentTime ?? 0);
       const wait = Math.max(MIN_CYCLES * CYCLE - t, CYCLE - (t % CYCLE));
       timer = window.setTimeout(() => setLeaving(true), wait);
     };
@@ -41,7 +41,9 @@ export default function Loader() {
       <noscript>
         <style>{".loader{display:none}"}</style>
       </noscript>
-      <div ref={logo} className="loader-logo" />
+      <div ref={logo} className="loader-logo">
+        <div className="loader-outline" />
+      </div>
     </div>
   );
 }
