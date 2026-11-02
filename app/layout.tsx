@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Image from "next/image";
 import "./globals.css";
 import Loader from "./loader";
 
@@ -26,6 +27,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <Loader />
+        <header className="flex items-center justify-between px-4 pt-6 md:px-14 md:pt-15">
+          <Image src="/logo.png" alt="Point Blank" width={480} height={180} preload className="h-8 w-auto" />
+          {/* ponytail: menu does nothing yet, wire it up when there is a menu */}
+          <button type="button" aria-label="Menu" className="flex flex-col gap-1.5">
+            <span className="h-2 w-8 bg-white" />
+            <span className="h-2 w-8 bg-white" />
+          </button>
+        </header>
         {children}
       </body>
     </html>
