@@ -25,7 +25,7 @@ import { useEffect, useRef } from "react";
 
 const SIZE = 150; // light diameter, vmax; theirs is 2160px on a 1440px-wide screen
 const OPACITY = 0.5; // same as theirs
-const BG = [0x12, 0x13, 0x24]; // --background in globals.css
+const BG = [0x12, 0x13, 0x24]; // --background in globals.css, where the page starts
 // Light color. Theirs is #1f1f38 at 50% over #0c0d1b; #252540 would give our background
 // the same lift, this one about 2.5 times as much so it reads more.
 const COLOR = [0x42, 0x41, 0x6c];
@@ -39,6 +39,23 @@ const DRIFT = 0.08; // how far each ellipse wanders, in light radii
 const BREATH = 0.08; // how much each ellipse grows and shrinks
 const LENS_SIGMA = 0.28; // width of each lens bump, in light radii (smaller = tighter zoom area)
 const LENS_K = 0.11 * LENS_SIGMA ** 2; // lens strength, in light radii (limits above; zoom scales with the 0.11)
+// Pointer: while it moves, the dots around it get carried along its path, pushed aside
+// and curled into a wake; once it stops they spring back with a little bounce, so under
+// a still pointer the dots are just dots. Every cell of a coarse grid is a damped spring
+// that the pointer's motion kicks; the shader reads the grid with smoothing. A faster
+// move kicks harder; a slow one barely stirs them.
+const FLOW_CELL = 8; // px per grid cell
+const FLOW_RADIUS = 75; // px: gaussian reach of the pointer's kick
+const FLOW_CARRY = 2.5; // kick along the pointer's motion, per px it moves (1/s)
+const FLOW_PART = 2.0; // kick away from the pointer (1/s)
+const FLOW_CURL = 1.5; // kick sideways around it, curling into a wake (1/s)
+const FLOW_MAX = 28; // px: the most a dot ever shifts
+const SPRING_HZ = 1.4; // how fast the dots swing back
+const SPRING_DAMP = 0.5; // 1 = straight back, lower = more bounce
+// Stirred dots light up: their contrast grows with how far they're shifted, up to
+// 1 + FLOW_GLOW times at FLOW_MAX. On a fine regular grid a shift alone barely shows;
+// this is what makes the wake read as dots on the move.
+const FLOW_GLOW = 2.5;
 
 // Offsets and radii in light radii, angles in radians.
 type Ellipse = { x: number; y: number; rx: number; ry: number; angle: number; phase: number };
@@ -46,8 +63,24 @@ type Ellipse = { x: number; y: number; rx: number; ry: number; angle: number; ph
 type Light = { from: number[]; to: number[]; t0: number; duration: number; turn: number[]; shape: Ellipse[]; enter: number; leave: number };
 // On screen, in CSS px.
 type Placed = { x: number; y: number; rx: number; ry: number; angle: number };
+// The flow grid as RGBA bytes: R, G = x, y shift of the dots, 128 = none,
+// +-127 = +-FLOW_MAX px. changed: whether it needs uploading again.
+type Flow = { bytes: Uint8Array; cols: number; rows: number; changed: boolean };
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
+
+// The page background under the lights and dots. app/scroll-text.tsx shifts it as you
+// scroll; the shader reads it every frame. redrawStill repaints when nothing animates
+// (reduced motion).
+const bg = [...BG];
+let redrawStill: (() => void) | undefined;
+
+export function setPageBackground(rgb: number[]) {
+  bg.splice(0, 3, ...rgb);
+  // Shows through in the no-WebGL fallback, where the lights are a transparent canvas.
+  document.body.style.backgroundColor = `rgb(${rgb})`;
+  redrawStill?.();
+}
 
 function makeShape(): Ellipse[] {
   return Array.from({ length: PER_LIGHT }, (_, i) => {
@@ -182,6 +215,10 @@ uniform vec3 uBg;
 uniform vec3 uColor;
 uniform float uOpacity;
 uniform sampler2D uDots; // the 6x6 dot tile
+uniform sampler2D uFlow; // the dots' shift per grid cell (see Flow)
+uniform vec2 uFlowSize; // px the grid covers
+uniform float uFlowMax; // px at full scale
+uniform float uFlowGlow; // FLOW_GLOW
 
 vec3 texel(vec2 i) { return texture2D(uDots, (mod(i, 6.0) + 0.5) / 6.0).rgb; }
 
@@ -220,7 +257,10 @@ void main() {
     lensSum += G / max(1.0 - F, 1e-4);
   }
   vec3 lit = mix(uBg, uColor, 1.0 - lightKeep);
-  vec3 s = dots(p + uK * lensKeep * lensSum);
+  // Reading the dots from behind their shift moves them by it.
+  vec2 shift = (texture2D(uFlow, p / uFlowSize).xy - 128.0 / 255.0) * (255.0 / 127.0) * uFlowMax;
+  vec3 s = dots(p - shift + uK * lensKeep * lensSum);
+  s = 0.5 + (s - 0.5) * (1.0 + uFlowGlow * min(length(shift) / uFlowMax, 1.0));
   // CSS mix-blend-mode: overlay of the dots onto what's under them.
   gl_FragColor = vec4(mix(2.0 * lit * s, 1.0 - 2.0 * (1.0 - lit) * (1.0 - s), step(0.5, lit)), 1.0);
 }`;
@@ -257,16 +297,30 @@ function webglRenderer(canvas: HTMLCanvasElement, tile: HTMLImageElement) {
   ])
     gl.texParameteri(gl.TEXTURE_2D, k, v);
 
+  // The flow grid on texture unit 1, smoothed between cells; one still cell to start.
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128, 128, 0, 255]));
+  for (const [k, v] of [
+    [gl.TEXTURE_MIN_FILTER, gl.LINEAR],
+    [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+    [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE],
+    [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE],
+  ])
+    gl.texParameteri(gl.TEXTURE_2D, k, v);
+
   const u = (name: string) => gl.getUniformLocation(prog, name);
-  gl.uniform3f(u("uBg"), BG[0] / 255, BG[1] / 255, BG[2] / 255);
   gl.uniform3f(u("uColor"), COLOR[0] / 255, COLOR[1] / 255, COLOR[2] / 255);
   gl.uniform1f(u("uOpacity"), OPACITY);
   gl.uniform1i(u("uDots"), 0);
-  const [uRes, uE, uAx, uInvSig2, uK] = ["uRes", "uE", "uAx", "uInvSig2", "uK"].map(u);
+  gl.uniform1i(u("uFlow"), 1);
+  gl.uniform1f(u("uFlowMax"), FLOW_MAX);
+  gl.uniform1f(u("uFlowGlow"), FLOW_GLOW);
+  const [uRes, uE, uAx, uInvSig2, uK, uBg, uFlowSize] = ["uRes", "uE", "uAx", "uInvSig2", "uK", "uBg", "uFlowSize"].map(u);
   const E = new Float32Array(MAX_LIGHTS * PER_LIGHT * 4);
   const AX = new Float32Array(MAX_LIGHTS * PER_LIGHT * 2);
 
-  return (lights: Placed[][], r: number) => {
+  return (lights: Placed[][], r: number, flow?: Flow) => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (canvas.width !== w || canvas.height !== h) {
@@ -281,10 +335,15 @@ function webglRenderer(canvas: HTMLCanvasElement, tile: HTMLImageElement) {
       AX.set([1 / e.rx, 1 / e.ry], i * 2);
     }
     gl.uniform2f(uRes, w, h);
+    gl.uniform3f(uBg, bg[0] / 255, bg[1] / 255, bg[2] / 255);
     gl.uniform4fv(uE, E);
     gl.uniform2fv(uAx, AX);
     gl.uniform1f(uInvSig2, 1 / (LENS_SIGMA * r) ** 2);
     gl.uniform1f(uK, LENS_K * r * r);
+    if (flow) {
+      if (flow.changed) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, flow.cols, flow.rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, flow.bytes);
+      gl.uniform2f(uFlowSize, flow.cols * FLOW_CELL, flow.rows * FLOW_CELL);
+    } else gl.uniform2f(uFlowSize, w, h);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 }
@@ -340,6 +399,7 @@ export default function AmbientLight() {
     let frame = 0;
     let stopped = false;
     let onResize = () => {};
+    let stopFlow = () => {};
 
     const tile = new Image();
     tile.src = "/dots.png";
@@ -350,10 +410,10 @@ export default function AmbientLight() {
         if (stopped) return;
         const gl = tile.naturalWidth ? webglRenderer(canvas, tile) : null;
         const fallback = gl ? null : canvasRenderer(canvas);
-        const render = (lights: Light[], now: number) => {
+        const render = (lights: Light[], now: number, flow?: Flow) => {
           const r = ((SIZE / 2) * Math.max(box.clientWidth, box.clientHeight)) / 100;
           const placed = lights.slice(0, MAX_LIGHTS).map((l) => place(l, now, r));
-          if (gl) gl(placed, r);
+          if (gl) gl(placed, r, flow);
           else fallback?.(placed);
         };
 
@@ -365,11 +425,114 @@ export default function AmbientLight() {
             render([{ from: mid, to: mid, t0: 0, duration: 1, turn: [0, 0], shape, enter: 0, leave: 1 }], 0);
           };
           onResize();
+          redrawStill = onResize;
           window.addEventListener("resize", onResize);
         } else {
           // Only ever one light. The next is made once the current one has left the
           // screen, so even a resize can't put two on screen at once.
           let light: Light | undefined;
+
+          // The flow grid: per cell a shift d (px) and its speed v (px/s), x and y.
+          let cols = 0;
+          let rows = 0;
+          let d = new Float32Array(0);
+          let v = new Float32Array(0);
+          let bytes = new Uint8Array(0);
+          let pointer: number[] | undefined;
+          let last: number[] | undefined;
+          let prev = 0;
+          let resting = true; // everything back at rest: skip the work until the next move
+          const onMove = (e: PointerEvent) => {
+            pointer = [e.clientX, e.clientY];
+          };
+          // A lifted finger or a pointer leaving the window: the next move starts fresh
+          // instead of kicking all along the jump from the old spot. (A mouse button coming
+          // up doesn't count: the mouse is still there.)
+          const onEnd = () => {
+            pointer = undefined;
+          };
+          const onUp = (e: PointerEvent) => {
+            if (e.pointerType !== "mouse") onEnd();
+          };
+          addEventListener("pointermove", onMove, { passive: true });
+          addEventListener("pointerup", onUp);
+          addEventListener("pointercancel", onEnd);
+          root.addEventListener("pointerleave", onEnd);
+          stopFlow = () => {
+            removeEventListener("pointermove", onMove);
+            removeEventListener("pointerup", onUp);
+            removeEventListener("pointercancel", onEnd);
+            root.removeEventListener("pointerleave", onEnd);
+          };
+
+          // Kick the cells around (x, y) for a pointer move of (mx, my) px.
+          const kick = (x: number, y: number, mx: number, my: number) => {
+            const len = Math.hypot(mx, my);
+            const reach = Math.ceil((2.5 * FLOW_RADIUS) / FLOW_CELL);
+            const ci = Math.floor(x / FLOW_CELL);
+            const cj = Math.floor(y / FLOW_CELL);
+            for (let j = Math.max(cj - reach, 0); j <= Math.min(cj + reach, rows - 1); j++)
+              for (let i = Math.max(ci - reach, 0); i <= Math.min(ci + reach, cols - 1); i++) {
+                const ex = (i + 0.5) * FLOW_CELL - x;
+                const ey = (j + 0.5) * FLOW_CELL - y;
+                const dist = Math.hypot(ex, ey) || 1;
+                const w = Math.exp(-(dist * dist) / FLOW_RADIUS ** 2);
+                const ux = ex / dist; // away from the pointer
+                const uy = ey / dist;
+                // Sideways: turned a quarter toward whichever side of the path the cell is,
+                // so the two sides curl in opposite directions, like a wake.
+                const side = Math.sign(mx * uy - my * ux);
+                const k = (j * cols + i) * 2;
+                v[k] += w * (FLOW_CARRY * mx + len * (FLOW_PART * ux - FLOW_CURL * side * uy));
+                v[k + 1] += w * (FLOW_CARRY * my + len * (FLOW_PART * uy + FLOW_CURL * side * ux));
+              }
+          };
+
+          const stepFlow = (now: number): Flow => {
+            const wasResting = resting;
+            const c = Math.ceil(box.clientWidth / FLOW_CELL) + 1;
+            const rr = Math.ceil(box.clientHeight / FLOW_CELL) + 1;
+            if (c !== cols || rr !== rows) {
+              cols = c;
+              rows = rr;
+              d = new Float32Array(c * rr * 2);
+              v = new Float32Array(c * rr * 2);
+              bytes = new Uint8Array(c * rr * 4).fill(128);
+              resting = false;
+            }
+            const dt = Math.min((now - prev) / 1000, 0.05);
+            prev = now;
+            const moved = pointer && last && (pointer[0] !== last[0] || pointer[1] !== last[1]);
+            if (moved && pointer && last) {
+              const mx = pointer[0] - last[0];
+              const my = pointer[1] - last[1];
+              // Several kicks along a long jump so a fast flick still leaves a smooth trail.
+              const n = Math.ceil(Math.hypot(mx, my) / (FLOW_RADIUS / 3));
+              for (let k = 1; k <= n; k++) kick(last[0] + (mx * k) / n, last[1] + (my * k) / n, mx / n, my / n);
+              resting = false;
+            }
+            last = pointer;
+            if (!resting) {
+              const w0 = 2 * Math.PI * SPRING_HZ;
+              let energy = 0;
+              for (let k = 0; k < d.length; k++) {
+                v[k] += (-w0 * w0 * d[k] - 2 * SPRING_DAMP * w0 * v[k]) * dt;
+                d[k] = Math.max(-FLOW_MAX, Math.min(FLOW_MAX, d[k] + v[k] * dt));
+                energy = Math.max(energy, Math.abs(d[k]), Math.abs(v[k]) * 0.05);
+                bytes[(k >> 1) * 4 + (k & 1)] = 128 + Math.round((d[k] / FLOW_MAX) * 127);
+              }
+              // Settled to well under a pixel: snap to rest and stop until the next move.
+              if (energy < 0.02) {
+                d.fill(0);
+                v.fill(0);
+                for (let k = 0; k < bytes.length; k += 4) bytes[k] = bytes[k + 1] = 128;
+                resting = true;
+              }
+            }
+            // At rest the grid is all "none" and already uploaded.
+            return { bytes, cols, rows, changed: !(wasResting && resting) };
+          };
+
           const tick = (now: number) => {
             const w = box.clientWidth;
             const h = box.clientHeight;
@@ -384,7 +547,7 @@ export default function AmbientLight() {
               next.t0 = light.t0 + light.leave * light.duration + PAUSE - next.enter * next.duration;
               light = next;
             }
-            render([light], now);
+            render([light], now, gl ? stepFlow(now) : undefined);
             frame = requestAnimationFrame(tick);
           };
           frame = requestAnimationFrame(tick);
@@ -400,7 +563,9 @@ export default function AmbientLight() {
     return () => {
       stopped = true;
       cancelAnimationFrame(frame);
+      stopFlow();
       window.removeEventListener("resize", onResize);
+      redrawStill = undefined;
       delete root.dataset.gl;
       canvas.remove();
     };

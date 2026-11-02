@@ -3,6 +3,15 @@
 :root {
   --background: #121324;
   --foreground: #ffffff;
+  /* Top bar height (app/layout.tsx): its top padding + the 32px logo. The hero
+     (app/page.tsx) is the rest of the first screen. */
+  --header-h: 3.5rem;
+}
+
+@media (width >= 48rem) {
+  :root {
+    --header-h: 5.75rem;
+  }
 }
 
 @theme inline {
@@ -196,6 +205,17 @@ html, a, button {
 @keyframes experience-shine {
   0% { transform: translate(0, 0) skew(-45deg, 45deg); }
   49.45%, 100% { transform: translate(2025px, 217px) skew(-45deg, 45deg); }
+}
+
+/* Scroll text (app/scroll-text.tsx): each letter (index --i) goes from gray to white as
+   --p, 0..1 from the scroll position, passes it, over --front letters, so the fill has
+   a soft gradient edge. --span = letters + --front, so at --p = 1 every letter is full. */
+.scroll-text-char {
+  color: color-mix(
+    in srgb,
+    #fff calc(clamp(0, (var(--p, 0) * var(--span) - var(--i)) / var(--front), 1) * 100%),
+    rgb(255 255 255 / 0.2)
+  );
 }
 
 /* Scroll hint (app/page.tsx, phones only): a hairline with a short light, pink at its
