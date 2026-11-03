@@ -20,7 +20,6 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-benzin);
-  --font-serif: var(--font-things);
 }
 
 body {
@@ -217,19 +216,7 @@ html, a, button {
   49.45%, 100% { transform: translate(2025px, 217px) skew(-45deg, 45deg); }
 }
 
-/* Scroll text (app/scroll-text.tsx): each letter (index --i) goes from gray to white as
-   --p, 0..1 from the scroll position, passes it, over --front letters, so the fill has
-   a soft gradient edge. --span = letters + --front, so at --p = 1 every letter is full.
-   --p and --e default to 1: without JS the text just shows, filled and in place. */
-.scroll-text-char {
-  color: color-mix(
-    in srgb,
-    #fff calc(clamp(0, (var(--p, 1) * var(--span) - var(--i)) / var(--front), 1) * 100%),
-    rgb(255 255 255 / 0.2)
-  );
-}
-
-/* The script words (an SVG each, app/scroll-text.tsx), like "Experience" in the header:
+/* Handwritten words (app/script-word.tsx, not on the page for now), like "Experience":
    much larger than the caps, tilted, overlapping the line above and below without
    pushing them apart (the negative block margins). The SVG is the word's em box, its
    baseline 0.25em up from the bottom; the swashes reach past it. Line height 0 so only
@@ -270,11 +257,6 @@ html, a, button {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* On the way in, odd and even lines come from opposite sides and meet as it pins. */
-  .scroll-text-line {
-    translate: calc((1 - var(--e, 1)) * var(--dir) * 24cqw) 0;
-  }
-
   /* Writing: every stroke at its own start (--s) and length in time (--t), after the
      words before it (--delay). Eased per stroke, so the pen slows into each lift. */
   [data-pen="down"] .scroll-text-script mask path {
@@ -316,6 +298,21 @@ html, a, button {
 
 @keyframes scroll-notice {
   to { transform: translateY(40px); }
+}
+
+/* ...and it fades out over the first 80px you scroll, tied to the scroll position. On
+   its children, since the hint itself runs its intro. Only where scroll timelines
+   exist: elsewhere the animation would just run once and hide it for good. */
+@supports (animation-timeline: scroll()) {
+  .scroll-notice > * {
+    animation: scroll-notice-out linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 80px;
+  }
+}
+
+@keyframes scroll-notice-out {
+  to { opacity: 0; }
 }
 
 @keyframes intro-rise {

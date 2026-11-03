@@ -16,11 +16,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// The faces of the header SVG (public/web-header.svg), for live text. Subset to Latin
-// from docs/fonts. The third, Have Heart, isn't loaded: its words are drawn as SVG
-// (app/script-words.ts, made from app/fonts/have-heart-one.woff2).
+// Benzin, the face of the header SVG's "and Content Marketing" (public/web-header.svg),
+// for live text. Subset to Latin from docs/fonts. Have Heart isn't loaded: its words are
+// drawn as SVG (app/script-words.ts, made from app/fonts/have-heart-one.woff2).
 const benzin = localFont({ src: "./fonts/benzin-semibold.woff2", weight: "600", variable: "--font-benzin" });
-const things = localFont({ src: "./fonts/things.woff2", weight: "400", variable: "--font-things" });
 
 export const metadata: Metadata = {
   title: "PB",
@@ -31,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${benzin.variable} ${things.variable} h-full antialiased overscroll-none`}
+      className={`${geistSans.variable} ${geistMono.variable} ${benzin.variable} h-full antialiased overscroll-none`}
     >
       <body className="min-h-full flex flex-col">
         <Loader />
