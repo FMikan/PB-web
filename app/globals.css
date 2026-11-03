@@ -26,6 +26,14 @@ body {
   color: var(--foreground);
 }
 
+/* Page still scrolls, the bar just isn't drawn. */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}
+
 /* Dot texture: one 6px tile of docs/img/PB_Dots_Overlay (2).png, blended in overlay
    mode like in the design file (its 50% gray leaves what's under it as is). Its own
    layer, above the drifting light (app/ambient-light.tsx, z-index -2), so the light
