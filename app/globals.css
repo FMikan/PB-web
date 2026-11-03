@@ -19,6 +19,8 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-benzin);
+  --font-serif: var(--font-things);
 }
 
 body {
@@ -217,13 +219,80 @@ html, a, button {
 
 /* Scroll text (app/scroll-text.tsx): each letter (index --i) goes from gray to white as
    --p, 0..1 from the scroll position, passes it, over --front letters, so the fill has
-   a soft gradient edge. --span = letters + --front, so at --p = 1 every letter is full. */
+   a soft gradient edge. --span = letters + --front, so at --p = 1 every letter is full.
+   --p and --e default to 1: without JS the text just shows, filled and in place. */
 .scroll-text-char {
   color: color-mix(
     in srgb,
-    #fff calc(clamp(0, (var(--p, 0) * var(--span) - var(--i)) / var(--front), 1) * 100%),
+    #fff calc(clamp(0, (var(--p, 1) * var(--span) - var(--i)) / var(--front), 1) * 100%),
     rgb(255 255 255 / 0.2)
   );
+}
+
+/* The script words (an SVG each, app/scroll-text.tsx), like "Experience" in the header:
+   much larger than the caps, tilted, overlapping the line above and below without
+   pushing them apart (the negative block margins). The SVG is the word's em box, its
+   baseline 0.25em up from the bottom; the swashes reach past it. Line height 0 so only
+   the SVG sizes the line inside. */
+.scroll-text-script {
+  display: inline-block;
+  margin: -0.38em 0.04em -0.24em;
+  font-size: 2.3em;
+  line-height: 0;
+  rotate: -6deg;
+}
+
+.scroll-text-script svg {
+  overflow: visible;
+  vertical-align: -0.25em;
+}
+
+/* The pen: each stroke of the mask is a dash (pathLength 1) that grows along it. Down
+   (and without JS) the words are written; up, they fade out and the strokes reset after.
+   The 1 2 pattern and the opacity keep an undrawn stroke from leaving a round cap dot. */
+.scroll-text-script mask path {
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 2;
+}
+
+[data-pen="up"] .scroll-text-script svg {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+[data-pen="up"] .scroll-text-script mask path {
+  stroke-dashoffset: 1;
+  opacity: 0;
+  transition: stroke-dashoffset 0s 0.3s, opacity 0s 0.3s;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* On the way in, odd and even lines come from opposite sides and meet as it pins. */
+  .scroll-text-line {
+    translate: calc((1 - var(--e, 1)) * var(--dir) * 24cqw) 0;
+  }
+
+  /* Writing: every stroke at its own start (--s) and length in time (--t), after the
+     words before it (--delay). Eased per stroke, so the pen slows into each lift. */
+  [data-pen="down"] .scroll-text-script mask path {
+    transition:
+      stroke-dashoffset calc(var(--t) * 1s) cubic-bezier(0.45, 0, 0.55, 1) calc((var(--delay) + var(--s)) * 1s),
+      opacity 0s calc((var(--delay) + var(--s)) * 1s);
+  }
+
+  /* Once a word is written (--after), the loader's shine crosses it every 4s, taking as
+     long as on "Experience". */
+  [data-pen="down"] .scroll-text-shine {
+    animation: script-shine 4s cubic-bezier(0.77, 0, 0.175, 1) calc(var(--after) * 1s) infinite both;
+  }
+}
+
+@keyframes script-shine {
+  0% { translate: 0 0; }
+  49.45%, 100% { translate: var(--travel) 0; }
 }
 
 /* Scroll hint (app/page.tsx, phones only): a hairline with a short light, pink at its
