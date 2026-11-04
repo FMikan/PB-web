@@ -91,8 +91,9 @@ export default function ScrollText() {
   return (
     // md+: 12svh above the statement puts it about 30% as far below the VSL as the text
     // used to sit (centered in a screen of its own). Phones: right under the hero, whose
-    // bottom holds the scroll hint.
-    <section ref={ref} className="px-4 py-8 md:px-14 md:py-[12svh]">
+    // bottom holds the scroll hint. Nothing below: the brush's line (app/brush-trace.tsx)
+    // starts right under it.
+    <section ref={ref} className="px-4 pt-8 md:px-14 md:pt-[12svh]">
       <p className="sr-only">Artists of old didn’t have 1% of the tools that everyone has access to today...</p>
       {/* The design, layer by layer (scripts/statement-layers.py, app/statement.ts): its
           white text a line at a time, as is, and over it the two pen marks, recolored.
