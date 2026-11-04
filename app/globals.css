@@ -215,38 +215,54 @@ html, a, button {
   49.45%, 100% { transform: translate(2025px, 217px) skew(-45deg, 45deg); }
 }
 
-/* The statement's pen marks (app/scroll-text.tsx): the design's red strokes as a mask
-   (public/statement-marks.png), filled with the gradient of "Experience", and the
-   loader's shine crossing them every 4s like on it: the same band and path as the
-   loader's (.loader-outline::after) in this box, which has about the logo's shape. */
-.statement-marks {
-  overflow: hidden;
-  background: linear-gradient(232deg, #ffb2c6 20%, #988bd0 70%);
-  mask: url(/statement-marks.png) 0 0 / 100% 100% no-repeat;
+/* Reveal: things that come in once they're on screen (app/scroll-text.tsx). The page's
+   JS arms them (data-reveal="armed", hidden) and sets "in" when they show up; they also
+   wait while the loader is up. Without JS, or with reduced motion, nothing is armed and
+   everything just shows. */
+
+/* The pen: each stroke of a .pen mask is a dash (pathLength 1) that grows along it,
+   every stroke at its own start (--s) and length in time (--t), after --delay. Eased
+   per stroke, so the pen slows into each lift. The 1 2 pattern and the opacity keep an
+   undrawn stroke from leaving a round cap dot. */
+.pen path {
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 2;
 }
 
-.statement-marks::after {
-  content: "";
-  position: absolute;
-  top: -60%;
-  left: -40%;
-  width: 9.4%;
-  height: 160%;
-  background: linear-gradient(232deg, #fff 20%, #ffb2c6 70%);
-  filter: blur(6px);
-  transform: skew(-45deg, 45deg);
+[data-reveal="armed"] .pen path,
+:root:not([data-loaded]) [data-reveal] .pen path {
+  stroke-dashoffset: 1;
+  opacity: 0;
+}
+
+/* The statement's lines rise into place from behind their own bottom edge: moved down
+   a full line and clipped by as much, so what shows stops at the line's slot. At rest
+   the clip is the whole line, not none, so the two can be animated between. */
+.statement-line {
+  clip-path: inset(0);
+}
+
+[data-reveal="armed"] .statement-line,
+:root:not([data-loaded]) [data-reveal] .statement-line {
+  translate: 0 100%;
+  clip-path: inset(0 0 100% 0);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .statement-marks::after {
-    animation: marks-shine 4s cubic-bezier(0.77, 0, 0.175, 1) infinite both;
+  [data-reveal="in"] .pen path {
+    transition:
+      stroke-dashoffset calc(var(--t) * 1s) cubic-bezier(0.45, 0, 0.55, 1) calc((var(--delay) + var(--s)) * 1s),
+      opacity 0s calc((var(--delay) + var(--s)) * 1s);
   }
-}
 
-/* The loader's sweep (loader-shine) in 1.98s, as on "Experience"; the rest of 4s waits. */
-@keyframes marks-shine {
-  0% { top: -60%; left: -40%; }
-  49.45%, 100% { top: 0%; left: 129%; }
+  [data-reveal="in"] .statement-line {
+    transition:
+      translate 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--delay),
+      clip-path 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--delay);
+  }
 }
 
 /* Handwritten words (app/script-word.tsx, not on the page for now), like "Experience":
@@ -267,40 +283,21 @@ html, a, button {
   vertical-align: -0.25em;
 }
 
-/* The pen: each stroke of the mask is a dash (pathLength 1) that grows along it. Down
-   (and without JS) the words are written; up, they fade out and the strokes reset after.
-   The 1 2 pattern and the opacity keep an undrawn stroke from leaving a round cap dot. */
-.scroll-text-script mask path {
-  fill: none;
-  stroke: #fff;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 1 2;
-}
-
-[data-pen="up"] .scroll-text-script svg {
+/* Armed again after being in (they can be written again), the words fade out first and
+   the strokes reset after. */
+[data-reveal="armed"] .scroll-text-script svg {
   opacity: 0;
   transition: opacity 0.3s;
 }
 
-[data-pen="up"] .scroll-text-script mask path {
-  stroke-dashoffset: 1;
-  opacity: 0;
+[data-reveal="armed"] .scroll-text-script .pen path {
   transition: stroke-dashoffset 0s 0.3s, opacity 0s 0.3s;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Writing: every stroke at its own start (--s) and length in time (--t), after the
-     words before it (--delay). Eased per stroke, so the pen slows into each lift. */
-  [data-pen="down"] .scroll-text-script mask path {
-    transition:
-      stroke-dashoffset calc(var(--t) * 1s) cubic-bezier(0.45, 0, 0.55, 1) calc((var(--delay) + var(--s)) * 1s),
-      opacity 0s calc((var(--delay) + var(--s)) * 1s);
-  }
-
   /* Once a word is written (--after), the loader's shine crosses it every 4s, taking as
      long as on "Experience". */
-  [data-pen="down"] .scroll-text-shine {
+  [data-reveal="in"] .scroll-text-shine {
     animation: script-shine 4s cubic-bezier(0.77, 0, 0.175, 1) calc(var(--after) * 1s) infinite both;
   }
 }

@@ -49,6 +49,9 @@ export default function Home() {
         </div>
       </main>
       <ScrollText />
+      {/* ponytail: room to scroll past the statement while testing its reveal; remove when
+          the next section goes here. */}
+      <div aria-hidden className="h-[150svh]" />
     </>
   );
 }

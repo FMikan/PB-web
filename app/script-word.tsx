@@ -3,20 +3,21 @@ import { SCRIPT_WORDS } from "./script-words";
 
 // A handwritten word from app/script-words.ts (made by scripts/script-words.py): the
 // letters, shown through a mask of pen strokes that globals.css draws one after another,
-// like the header's swoosh, when an ancestor gets data-pen="down" ("up" hides it again;
-// without data-pen it just shows). Then the loader's shine crosses it every 4s, like on
+// like the header's swoosh, when an ancestor gets data-reveal="in" (globals.css,
+// Reveal; "armed" hides it again). Then the loader's shine crosses it every 4s, like on
 // "Experience". Put it in a .scroll-text-script span for its size and tilt; delay (s)
 // lets several words be written one after the other.
 //
 // Not on the page for now. It wrote "alive, unique." in at the end of the scroll text;
-// see git history (b7431d3) for how app/scroll-text.tsx triggered it.
+// git history (b7431d3) has it there, triggered as the scroll fill reached it (then
+// called data-pen down/up).
 export default function ScriptWord({ id, text, delay = 0 }: { id: string; text: string; delay?: number }) {
   const { width, glyphs, strokes, duration } = SCRIPT_WORDS[text];
   return (
     <svg viewBox={`0 -750 ${width} 1000`} width={`${width / 1000}em`} height="1em" style={{ "--delay": delay } as CSSProperties}>
       <defs>
         <path id={`${id}-glyphs`} d={glyphs} />
-        <mask id={`${id}-pen`} maskUnits="userSpaceOnUse" x={-500} y={-1250} width={width + 1000} height={2000}>
+        <mask id={`${id}-pen`} className="pen" maskUnits="userSpaceOnUse" x={-500} y={-1250} width={width + 1000} height={2000}>
           {strokes.map(([d, w, s, t], k) => (
             <path key={k} d={d} pathLength={1} strokeWidth={w} style={{ "--s": s, "--t": t } as CSSProperties} />
           ))}
