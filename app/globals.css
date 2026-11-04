@@ -19,7 +19,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-benzin);
 }
 
 body {
@@ -214,6 +213,40 @@ html, a, button {
 @keyframes experience-shine {
   0% { transform: translate(0, 0) skew(-45deg, 45deg); }
   49.45%, 100% { transform: translate(2025px, 217px) skew(-45deg, 45deg); }
+}
+
+/* The statement's pen marks (app/scroll-text.tsx): the design's red strokes as a mask
+   (public/statement-marks.png), filled with the gradient of "Experience", and the
+   loader's shine crossing them every 4s like on it: the same band and path as the
+   loader's (.loader-outline::after) in this box, which has about the logo's shape. */
+.statement-marks {
+  overflow: hidden;
+  background: linear-gradient(232deg, #ffb2c6 20%, #988bd0 70%);
+  mask: url(/statement-marks.png) 0 0 / 100% 100% no-repeat;
+}
+
+.statement-marks::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: -40%;
+  width: 9.4%;
+  height: 160%;
+  background: linear-gradient(232deg, #fff 20%, #ffb2c6 70%);
+  filter: blur(6px);
+  transform: skew(-45deg, 45deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .statement-marks::after {
+    animation: marks-shine 4s cubic-bezier(0.77, 0, 0.175, 1) infinite both;
+  }
+}
+
+/* The loader's sweep (loader-shine) in 1.98s, as on "Experience"; the rest of 4s waits. */
+@keyframes marks-shine {
+  0% { top: -60%; left: -40%; }
+  49.45%, 100% { top: 0%; left: 129%; }
 }
 
 /* Handwritten words (app/script-word.tsx, not on the page for now), like "Experience":

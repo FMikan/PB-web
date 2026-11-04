@@ -1,12 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef } from "react";
 import { setPageBackground } from "./ambient-light";
 
-// The statement under the hero, in Benzin like the header's "and Content Marketing",
-// broken and tracked as in the design (docs/ss/image copy 4.png). The text itself stays
-// still; scrolling past it only drifts the page background from the hero's navy through
-// purple toward pink.
+// The statement under the hero, as in the design (docs/img/Point_Blank_WEB_002.png),
+// its red pen marks in the header's gradient with its shine. Scrolling past it drifts
+// the page background from the hero's navy through purple toward pink.
 
 // Page background along the way (0 = this section's top at the bottom of the screen,
 // 1 = its bottom there, the end of the page).
@@ -53,22 +53,29 @@ export default function ScrollText() {
   }, []);
 
   return (
-    // md+: 12svh above the text puts it about 30% as far below the VSL as it used to sit
-    // (centered in a screen of its own). Phones: right under the hero, whose bottom holds
-    // the scroll hint.
-    <section ref={ref} className="@container px-4 py-8 md:px-14 md:py-[12svh]">
-      {/* Tracking and leading measured off the design: -0.08em matches both its lines'
-          widths to the pixel. lg+: lines never wrap. The first is the widest, about
-          20.2em, so 4.1cqw (about 55px on a laptop) fits it with room. Below that they
-          wrap, balanced, at 8cqw. Capped at 8cqh / 88px. */}
-      <p className="text-center font-display text-[min(8cqw,8cqh,5.5rem)] leading-[0.9] tracking-[-0.08em] lg:text-[min(4.1cqw,8cqh,5.5rem)]">
-        <span className="block text-balance lg:whitespace-nowrap">Artists of old didn’t have 1% of the tools</span>
-        <span className="block text-balance lg:whitespace-nowrap">
-          {/* Normal spacing for the dots, or "..." merges into a bar at this tracking
-              (Benzin's own ellipsis glyph is a single dot). */}
-          that everyone has access to today<span className="tracking-normal">...</span>
-        </span>
-      </p>
+    // md+: 12svh above the statement puts it about 30% as far below the VSL as the text
+    // used to sit (centered in a screen of its own). Phones: right under the hero, whose
+    // bottom holds the scroll hint.
+    <section ref={ref} className="px-4 py-8 md:px-14 md:py-[12svh]">
+      {/* The design, layer by layer (scripts/statement-layers.py): its white text as is,
+          and over it the pen marks, filled with the header's gradient and shine
+          (globals.css .statement-marks). The design is a 3840px-wide frame where the
+          statement takes 3464 / 3840 = 90.21% of the width. Phones keep that share;
+          md+ shows it 40% smaller, at 54.13%. Shown at the PNG's own pixels, not
+          re-encoded. */}
+      <div className="relative mx-auto w-[90.21vw] max-w-full md:w-[54.13vw]">
+        <Image
+          src="/statement-text.png"
+          alt="Artists of old didn’t have 1% of the tools that everyone has access to today..."
+          width={3464}
+          height={463}
+          unoptimized
+          className="h-auto w-full"
+        />
+        {/* The marks' box within the text's, in the design's pixels: x 1471, width 1122,
+            against the text's x 188, width 3464; both full height. */}
+        <div aria-hidden className="statement-marks absolute top-0 left-[37.04%] h-full w-[32.39%]" />
+      </div>
     </section>
   );
 }
