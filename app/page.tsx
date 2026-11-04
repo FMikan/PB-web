@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import BrushTrace from "./brush-trace";
 import ScrollText from "./scroll-text";
 
 export default function Home() {
@@ -50,10 +49,6 @@ export default function Home() {
         </div>
       </main>
       <ScrollText />
-      <BrushTrace />
-      {/* ponytail: room to scroll past the brush while testing it; remove when the next
-          section goes here. */}
-      <div aria-hidden className="h-svh" />
     </>
   );
 }
