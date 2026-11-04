@@ -361,3 +361,434 @@ html, a, button {
   from { stroke-dashoffset: 1; }
   to { stroke-dashoffset: 0; }
 }
+
+/* Menu (app/menu.tsx). Hidden until the <dialog> opens, so every rule here costs nothing
+   while it's closed. The way in uses @starting-style: what an element starts from when
+   the dialog first renders it. The way out is [data-closing], which the JS holds until
+   these transitions end. Phones: the panel is the whole screen and the pistol sits right
+   where the header's is. md+: as on rockstargames.com/VI, the panel takes the right 40%
+   and the pistol sits large in what's left. */
+:root {
+  --menu-panel: 100vw;
+  --menu-gutter: 1rem;
+  --menu-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --menu-swing: cubic-bezier(0.3, 1.3, 0.5, 1); /* the barrel overshoots a little, then settles */
+  --menu-pink: #ffb2c6;
+  --menu-lilac: #ccc2f5;
+}
+
+@media (width >= 48rem) {
+  :root {
+    --menu-panel: clamp(24rem, 40vw, 44rem);
+    --menu-gutter: 3.5rem;
+  }
+}
+
+:root:has(.menu[open]) {
+  overflow: hidden;
+}
+
+/* No display here: a <dialog> is hidden only by the browser's own display: none. */
+.menu {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.menu::backdrop {
+  background: transparent;
+}
+
+.menu :is(a, button):focus-visible {
+  outline: 2px solid var(--menu-pink);
+  outline-offset: 4px;
+}
+
+/* The page's look without its live layers: the navy, a still glow behind the logo, and
+   the dot tile blended in overlay like body::before. */
+.menu-stage {
+  position: absolute;
+  inset: 0;
+  background:
+    url(/dots.png),
+    radial-gradient(38% 60% at calc((100% - var(--menu-panel)) / 2) 50%, rgb(255 178 198 / 0.24), rgb(152 139 208 / 0.1) 55%, transparent),
+    var(--background);
+  background-blend-mode: overlay, normal, normal;
+}
+
+/* The loader's backdrop. */
+.menu-panel {
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 0 auto;
+  display: flex;
+  width: var(--menu-panel);
+  flex-direction: column;
+  gap: 2rem;
+  overflow-y: auto;
+  padding: calc(var(--header-h) + 2rem) var(--menu-gutter) 1.5rem 1rem;
+  background: linear-gradient(189deg, #1f1f38 0.55%, #18182d 30.38%, #111222 65.19%, #0c0d1b 100%);
+}
+
+@media (width >= 48rem) {
+  .menu-panel {
+    padding: calc(var(--header-h) + 1.5rem) var(--menu-gutter) 2.5rem 3rem;
+  }
+}
+
+/* Same spot and size as the burger: its center is 1rem above the header's bottom. */
+.menu-close {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--header-h) - 2.75rem);
+  right: calc(var(--menu-gutter) - 0.75rem);
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.menu-close span {
+  position: absolute;
+  top: 1.5rem;
+  left: 0.75rem;
+  width: 2rem;
+  height: 0.5rem;
+  background: #fff;
+  rotate: 45deg;
+}
+
+.menu-close span:last-child {
+  rotate: -45deg;
+}
+
+/* One link: the bullet hole on the left, in the room the word moves over for. Aimed at,
+   the word makes way for the laser; hit, for the hole too. */
+.menu-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-block: 0.125rem;
+  color: var(--menu-lilac);
+}
+
+.menu .menu-link:focus-visible {
+  outline-offset: -2px;
+}
+
+.menu-link[aria-current] {
+  color: #fff;
+}
+
+.menu-word {
+  font-family: var(--font-benzin);
+  font-size: clamp(2.5rem, 3.6vw, 4rem);
+  line-height: 1.25;
+  letter-spacing: -0.05em;
+}
+
+.menu-link[data-aim] .menu-word {
+  translate: 1.5rem 0;
+}
+
+.menu-link[data-hit] .menu-word {
+  translate: 2.75rem 0;
+}
+
+.menu-link[data-aim] .menu-word {
+  color: var(--menu-pink);
+}
+
+ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
+  color: rgb(204 194 245 / 0.45);
+}
+
+/* Also what the barrel aims at, so it's measured even while it's invisible. */
+.menu-hole {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2rem;
+  height: 2rem;
+  margin-top: -1rem;
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+  stroke: rgb(255 255 255 / 0.55);
+  stroke-width: 0.8;
+  opacity: 0;
+}
+
+.menu-hole circle {
+  fill: #05060d;
+  stroke: #fff;
+  stroke-width: 1.2;
+}
+
+.menu-link[data-hit] .menu-hole {
+  opacity: 1;
+}
+
+@keyframes menu-hit {
+  from { scale: 1.7; }
+}
+
+/* The line: in the markup twice, over the socials on phones and under the pistol on md+,
+   and only one of the two renders. */
+.menu-pitch {
+  font-family: var(--font-benzin);
+  font-size: 1.125rem;
+  line-height: 1.25;
+  letter-spacing: -0.04em;
+}
+
+@media (width < 48rem) {
+  .menu-stage .menu-pitch {
+    display: none;
+  }
+}
+
+@media (width >= 48rem) {
+  .menu-panel .menu-pitch {
+    display: none;
+  }
+
+  .menu-stage .menu-pitch {
+    position: absolute;
+    bottom: 2.5rem;
+    left: var(--menu-gutter);
+  }
+}
+
+.menu-socials {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.875rem;
+  color: #e5ddff;
+}
+
+.menu-socials a {
+  display: block;
+  padding-block: 0.75rem;
+  background: linear-gradient(currentcolor, currentcolor) 0 calc(100% - 0.625rem) / 100% 1px no-repeat;
+  background-size: 0 1px;
+}
+
+@media (hover: hover) {
+  .menu-socials a:hover {
+    background-size: 100% 1px;
+  }
+}
+
+/* The weapon. Three layers: the mount stays put, so it can be measured; the gun takes the
+   aim; the recoil takes the kick. 14.22% 54.88% is the grip (GRIP in app/menu.tsx) and
+   11.91% the barrel's center line (BARREL_Y), as shares of the PNG's 1807 x 676. Phones:
+   the header logo's spot and size, 32px high. md+: the barrel's line sits a little above
+   the middle of the screen, about level with the middle link, and the pistol is 60% of
+   the room left of the panel. */
+.menu-mount {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--header-h) - 2rem);
+  left: 1rem;
+  width: 5.345rem;
+  aspect-ratio: 1807 / 676;
+  pointer-events: none;
+}
+
+@media (width >= 48rem) {
+  .menu-mount {
+    top: 44%;
+    left: calc((100vw - var(--menu-panel)) / 2);
+    width: calc((100vw - var(--menu-panel)) * 0.6);
+    translate: -50% 0;
+  }
+}
+
+.menu-gun,
+.menu-recoil {
+  position: absolute;
+  inset: 0;
+  transform-origin: 14.22% 54.88%;
+}
+
+.menu-gun {
+  will-change: rotate;
+}
+
+/* All of these start at the muzzle: the right edge, on the barrel's line. */
+.menu-laser,
+.menu-splash,
+.menu-round {
+  position: absolute;
+  top: 11.91%;
+  left: 100%;
+  pointer-events: none;
+}
+
+/* 100px wide so its gradient has pixels to it; the JS scales it to the distance. */
+.menu-laser {
+  width: 100px;
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(90deg, rgb(255 178 198 / 0.1), var(--menu-pink) 40%);
+  transform-origin: 0 50%;
+  scale: 0 1;
+}
+
+/* The splash: three layers centered on the muzzle, each scaling out from it, so they only
+   composite. The minimum keeps it visible on the phones' small pistol. */
+.menu-splash {
+  width: max(40%, 5.5rem);
+  aspect-ratio: 1;
+  overflow: visible;
+  fill: var(--menu-pink);
+  opacity: 0;
+  translate: -50% -50%;
+}
+
+.menu-ring {
+  fill: none;
+  stroke: var(--menu-pink);
+  stroke-width: 2.5;
+}
+
+.menu-round {
+  width: 11.09%;
+  margin: -5.545% 0 0 -5.545%;
+  overflow: visible;
+  fill: #fff;
+  opacity: 0;
+}
+
+/* The burger's top bar is the pistol's slide: it racks back and forward. */
+@keyframes menu-rack {
+  35% { translate: -0.625rem 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @media (hover: hover) {
+    .menu-burger:hover span:first-child {
+      animation: menu-rack 0.5s var(--menu-ease);
+    }
+  }
+
+  .menu-word {
+    transition: translate 0.45s var(--menu-ease), color 0.2s;
+  }
+
+  .menu-link[data-hit] .menu-hole {
+    animation: menu-hit 0.3s var(--menu-ease);
+  }
+
+  .menu-socials a {
+    transition: background-size 0.45s var(--menu-ease);
+  }
+
+  .menu-stage {
+    transition: opacity 0.4s;
+  }
+
+  .menu-panel {
+    transition: translate 0.75s var(--menu-ease);
+  }
+
+  .menu-close span {
+    transition: translate 0.5s var(--menu-ease), rotate 0.5s var(--menu-ease);
+  }
+
+  @media (hover: hover) {
+    .menu-close {
+      transition: rotate 0.5s var(--menu-ease);
+    }
+    .menu-close:hover {
+      rotate: 90deg;
+    }
+  }
+
+  /* The links rise from behind their own row's bottom edge, one after the other. */
+  .menu-link {
+    transition: translate 0.8s var(--menu-ease) calc(0.16s + var(--i) * 0.06s);
+  }
+
+  .menu-late {
+    transition: opacity 0.5s 0.5s, translate 0.8s var(--menu-ease) 0.5s;
+  }
+
+  /* The pistol is drawn in from the left, barrel low, and comes up level. Its aim then uses
+     the same rotate, on the shorter springy curve. */
+  .menu-gun {
+    transition: rotate 0.55s var(--menu-swing), translate 0.9s var(--menu-ease), opacity 0.4s;
+  }
+
+  .menu-laser {
+    transition: scale 0.55s var(--menu-swing);
+  }
+
+  @starting-style {
+    .menu[open] .menu-stage {
+      opacity: 0;
+    }
+    .menu[open] .menu-panel {
+      translate: 100% 0;
+    }
+    .menu[open] .menu-close span {
+      translate: 0 -0.4375rem;
+      rotate: 0deg;
+    }
+    .menu[open] .menu-close span:last-child {
+      translate: 0 0.4375rem;
+    }
+    .menu[open] .menu-link {
+      translate: 0 115%;
+    }
+    .menu[open] .menu-late {
+      opacity: 0;
+      translate: 0 0.75rem;
+    }
+    .menu[open] .menu-gun {
+      opacity: 0;
+      translate: -14% 0;
+      rotate: 12deg;
+    }
+  }
+
+  /* Out is quicker than in, and everything leaves together. */
+  .menu[data-closing] .menu-stage {
+    opacity: 0;
+    transition: opacity 0.3s 0.05s;
+  }
+
+  .menu[data-closing] .menu-panel {
+    translate: 100% 0;
+    transition: translate 0.35s cubic-bezier(0.7, 0, 0.84, 0);
+  }
+
+  .menu[data-closing] .menu-close span {
+    translate: 0 -0.4375rem;
+    rotate: 0deg;
+    transition-duration: 0.3s;
+  }
+
+  .menu[data-closing] .menu-close span:last-child {
+    translate: 0 0.4375rem;
+  }
+
+  .menu[data-closing] .menu-gun {
+    opacity: 0;
+    translate: -8% 0;
+    transition: translate 0.3s cubic-bezier(0.7, 0, 0.84, 0), opacity 0.25s;
+  }
+
+  .menu[data-closing] .menu-late {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+}
