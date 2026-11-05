@@ -3,11 +3,16 @@
 transparent outside. Run from the repo root: python3 scripts/logo-avatars.py
 
 The fallen four (public/logos/fallen) the same, but their white turned a mid gray.
+
+Each also gets its glow (glow/ next to it): its own light spread out, wide and a little across
+the way a lens smears it, uneven where its light is, with a slow wobble on top so it never comes
+out a neat round halo. The page lays it over the logo in soft lines (globals.css).
 """
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 # The eight the slider uses, of what's in docs/logos: avatar name to source file.
 SOURCES = {
@@ -42,6 +47,29 @@ def round_mask():
     return Image.fromarray((disc * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.BOX)
 
 
+GLOW_LOGO = 160  # px the logo is worked at; a glow is soft, it needs no more
+GLOW_BOX = (2.4, 1.7)  # the glow's size, in logo widths: wider than tall
+TINT = (222, 230, 255)  # white, a touch cool, like the reference's
+
+
+def glow(avatar, path):
+    s = GLOW_LOGO
+    pixels = np.asarray(avatar.resize((s, s), Image.LANCZOS), float) / 255
+    light = pixels[..., :3].mean(axis=2) ** 1.5 * pixels[..., 3]
+    w, h = round(s * GLOW_BOX[0]), round(s * GLOW_BOX[1])
+    canvas = np.zeros((h, w))
+    canvas[(h - s) // 2 : (h - s) // 2 + s, (w - s) // 2 : (w - s) // 2 + s] = light
+    spread = lambda up, across: ndimage.gaussian_filter(canvas, (up, across))
+    wobble = ndimage.gaussian_filter(np.random.default_rng(int.from_bytes(path.stem.encode())).normal(size=(h, w)), 20)
+    wobble = 0.95 + 0.4 * wobble / np.abs(wobble).max()
+    # Tight around the bright parts, a wider haze, and a long thin streak across.
+    amount = 0.45 * spread(2.5, 4) + (0.35 * spread(8, 21) + 0.3 * spread(3, 72)) * wobble
+    amount /= np.percentile(amount, 99.5)
+    alpha = ((1 - np.exp(-1.8 * amount.clip(0, None))) * 255).round().astype(np.uint8)
+    path.parent.mkdir(exist_ok=True)
+    Image.fromarray(np.dstack([np.full((h, w, 3), TINT, np.uint8), alpha]), "RGBA").save(path, optimize=True)
+
+
 def check(path, rim_min=200):
     """Fails if a corner isn't clear or the rim is anything but the ring all the way round."""
     pixels = np.asarray(Image.open(path))
@@ -74,6 +102,7 @@ def main():
             path = out / f"{name}.png"
             avatar.save(path, optimize=True)
             check(path, GRAY - 12 if gray else 200)
+            glow(avatar, out / "glow" / f"{name}.png")
             print(f"{path}  {path.stat().st_size // 1024} KB")
 
 

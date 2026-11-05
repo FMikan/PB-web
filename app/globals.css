@@ -856,7 +856,6 @@ html {
   left: 50%;
   bottom: calc(5svh - var(--ring-low) + 2.5rem);
   translate: -50% 0;
-  isolation: isolate; /* a glow goes behind all four, over the page */
   display: flex;
   gap: clamp(0.75rem, 1.6vw, 1.75rem);
 }
@@ -867,35 +866,33 @@ html {
   aspect-ratio: 1;
 }
 
-/* Pointed at, the front logo of the ring (data-lit, app/orbit-slider.tsx: in 3D :hover doesn't
-   reach it) and the fallen ones grow a little in a glow: white,
-   wider than tall, and not a smooth blur but fine horizontal lines, like light on an old screen
-   (docs/ss/image copy 16.png). The lines are screen pixels: 2 lit, 2 faint. */
-.panel::before,
-.fallen-logo::before {
-  content: "";
+.fallen-logo:hover {
+  z-index: 1; /* its glow over its neighbors */
+}
+
+/* The glow (docs/ss/image copy 16.png): each logo's own light spread wide and uneven
+   (scripts/logo-avatars.py), laid over the logo rather than behind it, and seen through soft
+   horizontal lines like an old screen's, 5 CSS px a line, blurred both sides. Every logo of the
+   ring has a little of it; the front one, with the mouse on it, all of it, and grows a little
+   (data-lit, app/orbit-slider.tsx: in 3D :hover doesn't reach it). The fallen ones only show a
+   faint touch, pointed at. The box is the glow image's, centered on the logo. */
+.glow {
   position: absolute;
-  z-index: -1;
-  inset: -40% -85%;
-  /* Brightest just outside the logo's edge (at 37-55% of the way out, in these boxes). */
-  background: radial-gradient(
-    closest-side,
-    rgb(255 255 255 / 0.85) 50%,
-    rgb(255 255 255 / 0.4) 70%,
-    rgb(255 255 255 / 0.12) 87%,
-    transparent
-  );
-  mask-image: repeating-linear-gradient(#000 0 2px, rgb(0 0 0 / 0.25) 2px 4px);
+  top: -35%;
+  left: -70%;
+  width: 240%;
+  max-width: none;
+  height: auto;
+  mask-image: repeating-linear-gradient(#000 0, rgb(0 0 0 / 0.3) 2.5px, #000 5px);
   opacity: 0;
   pointer-events: none;
 }
 
-/* Only as wide as the gap to its neighbors in the ring, which are behind it. */
-.panel::before {
-  inset: -40% -60%;
+.panel .glow {
+  opacity: 0.3;
 }
 
-.panel[data-lit]::before {
+.panel[data-lit] .glow {
   opacity: 1;
 }
 
@@ -904,8 +901,8 @@ html {
 }
 
 @media (hover: hover) {
-  .fallen-logo:hover::before {
-    opacity: 1;
+  .fallen-logo:hover .glow {
+    opacity: 0.35;
   }
 
   .fallen-logo:hover img {
@@ -914,8 +911,7 @@ html {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .panel::before,
-  .fallen-logo::before {
+  .glow {
     transition: opacity 0.35s;
   }
 

@@ -8,8 +8,9 @@ import { useEffect, useRef } from "react";
 // scroll turns it: the section is a tall track with the ring pinned on screen and one snap stop
 // per logo, so scrolling scrubs the ring, and wherever it's let go the browser's own scroll
 // snap settles it with a logo in the middle. Nothing is triggered. The loop rests off screen.
-// Under it, small and still, the fallen four, in gray. Pointed at, the front logo and those grow
-// a little in a glow (globals.css).
+// Under it, small and still, the fallen four, in gray. Every logo of the ring glows a little,
+// the front one fully with the mouse on it; the fallen ones only faintly, pointed at
+// (globals.css, the glows from scripts/logo-avatars.py).
 
 // In the order they come to the middle.
 const LOGOS = ["samurai", "snake", "helmet", "parrot", "book", "triangle", "cake", "bolt"];
@@ -144,6 +145,7 @@ export default function OrbitSlider() {
             {LOGOS.map((logo) => (
               <div key={logo} className="panel">
                 <Image src={`/logos/${logo}.png`} alt="" fill sizes="18vw" />
+                <Image src={`/logos/glow/${logo}.png`} alt="" width={384} height={272} unoptimized className="glow" />
               </div>
             ))}
           </div>
@@ -152,6 +154,7 @@ export default function OrbitSlider() {
           {FALLEN.map((logo) => (
             <div key={logo} className="fallen-logo">
               <Image src={`/logos/fallen/${logo}.png`} alt="" fill sizes="(min-width: 64rem) 5rem, 3rem" />
+              <Image src={`/logos/fallen/glow/${logo}.png`} alt="" width={384} height={272} unoptimized className="glow" />
             </div>
           ))}
         </div>
