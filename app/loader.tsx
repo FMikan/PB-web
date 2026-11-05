@@ -11,6 +11,10 @@ export default function Loader() {
   const [gone, setGone] = useState(false);
 
   useEffect(() => {
+    // A reload starts at the top, under the loader, not where the page was left. Instant, as the
+    // page otherwise scrolls smoothly (globals.css).
+    history.scrollRestoration = "manual";
+    window.scrollTo({ top: 0, behavior: "instant" });
     let timer = 0;
     // Once the page has loaded, show at least MIN_CYCLES glints and let the
     // current one finish, then fade out.

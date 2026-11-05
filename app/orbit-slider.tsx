@@ -8,10 +8,13 @@ import { useEffect, useRef } from "react";
 // scroll turns it: the section is a tall track with the ring pinned on screen and one snap stop
 // per logo, so scrolling scrubs the ring, and wherever it's let go the browser's own scroll
 // snap settles it with a logo in the middle. Nothing is triggered. The loop rests off screen.
+// Under it, small and still, the fallen four, in gray. Pointed at, the front logo and those grow
+// a little in a glow (globals.css).
 
 // In the order they come to the middle.
 const LOGOS = ["samurai", "snake", "helmet", "parrot", "book", "triangle", "cake", "bolt"];
 const ANGLE_BETWEEN_LOGOS = 360 / LOGOS.length;
+const FALLEN = ["spartan", "hacker", "star", "whiskey"];
 // All in logo widths, so the ring looks the same at any screen size. A real ring, so one logo
 // in the middle puts two more on each side, and the rest behind them, without placing any.
 const RADIUS_X = 2.85;
@@ -52,6 +55,7 @@ export default function OrbitSlider() {
     let currentTiltX = 0;
     let currentTiltY = 0;
     let frame = 0;
+    let pointer: { x: number; y: number } | undefined;
 
     const listeners = new AbortController();
     const on = { passive: true, signal: listeners.signal };
@@ -63,6 +67,9 @@ export default function OrbitSlider() {
       },
       on,
     );
+    // Where the mouse is, for the middle logo: in 3D the browser won't tell it it's hovered.
+    slider.addEventListener("pointermove", (e) => (pointer = e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : undefined), on);
+    slider.addEventListener("pointerleave", () => (pointer = undefined), on);
     slider.addEventListener(
       "mouseleave",
       () => {
@@ -72,13 +79,17 @@ export default function OrbitSlider() {
       on,
     );
 
+    let lit: HTMLElement | undefined;
     const place = () => {
       const tiltX = LOOK_DOWN + currentTiltX;
       stage.style.transform = `rotateX(${tiltX}deg) rotateY(${currentTiltY}deg)`;
+      let nearest = 0;
+      let nearestDepth = -Infinity;
       logos.forEach((logo, i) => {
         const angle = ((i * ANGLE_BETWEEN_LOGOS + currentRotation) * Math.PI) / 180;
         const along = angle - EVEN_OUT * Math.sin(2 * angle);
         const depth = RING_MIDDLE + RADIUS_Z * Math.cos(along);
+        if (depth > nearestDepth) [nearest, nearestDepth] = [i, depth];
         // Undoing the stage's tilt keeps it square on to the screen, so it stays a true circle.
         logo.style.transform =
           `translate3d(${RADIUS_X * Math.sin(along) * 100}%, 0, calc(var(--logo) * ${depth})) ` +
@@ -86,6 +97,18 @@ export default function OrbitSlider() {
         const scale = PERSPECTIVE / (PERSPECTIVE - depth);
         logo.style.filter = `brightness(${1 - (1 - scale) * DIMMING})`;
       });
+      // The front one, in the middle, lights up with the mouse on it (globals.css).
+      let over: HTMLElement | undefined;
+      if (pointer) {
+        const r = logos[nearest].getBoundingClientRect();
+        const inside = Math.hypot(pointer.x - r.left - r.width / 2, pointer.y - r.top - r.height / 2) <= r.width / 2;
+        if (inside) over = logos[nearest];
+      }
+      if (over !== lit) {
+        lit?.removeAttribute("data-lit");
+        over?.setAttribute("data-lit", "");
+        lit = over;
+      }
     };
     place();
 
@@ -124,6 +147,13 @@ export default function OrbitSlider() {
               </div>
             ))}
           </div>
+        </div>
+        <div className="fallen">
+          {FALLEN.map((logo) => (
+            <div key={logo} className="fallen-logo">
+              <Image src={`/logos/fallen/${logo}.png`} alt="" fill sizes="(min-width: 64rem) 5rem, 3rem" />
+            </div>
+          ))}
         </div>
       </div>
       {LOGOS.map((logo) => (

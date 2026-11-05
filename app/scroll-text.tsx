@@ -11,8 +11,8 @@ import { STORY } from "./story";
 // following the scroll): the two lines rise into place one after the other, then a pen
 // writes "1%" and circles "has", like the swoosh in the header. Then the story carries on
 // under it (app/story.ts) in two more beats, each once it's on screen and the one before
-// is a third through: an arrow is drawn down to the next line, and a third through the arrow
-// that line comes in the same way. Scrolling past drifts
+// is two-thirds through: an arrow is drawn down to the next line, and two-thirds through the
+// arrow that line comes in the same way. Scrolling past drifts
 // the page background from the hero's navy through purple toward pink, and on to a
 // midnight dark blue as the orbit slider below comes in.
 
@@ -36,7 +36,7 @@ function colorAt(q: number) {
 }
 
 // The next thing starts when this one is this far through (scripts/story-layers.py has the same).
-const HANDOFF = 1 / 3;
+const HANDOFF = 2 / 3;
 
 // The pen starts while the second line is still landing, and writes the marks one
 // right after the other, quicker than the speed they were generated at.

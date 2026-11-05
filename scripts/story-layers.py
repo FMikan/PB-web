@@ -30,7 +30,7 @@ PAD = 8  # px around each layer, so nothing is cut at the edge
 SPEED = 6000  # pen speed on the designs' marks, px per second
 LIFT = 0.03  # pause when the pen lifts, seconds
 RNG = np.random.default_rng(7)  # the arrows' wobble, the same on every run
-HANDOFF = 1 / 3  # the next thing starts when this one is this far through
+HANDOFF = 2 / 3  # the next thing starts when this one is this far through
 ARROW_TIME = 0.36  # seconds, about: the shaft, then the two barbs
 LINE_TIME = 0.6  # a line's rise (globals.css .statement-line)
 
@@ -197,11 +197,26 @@ def ring(a, name, shift, at, points, duration):
     return {**layer(name, b, shift, at), "strokes": [stroke], "duration": duration}
 
 
-def centered(text, red, top):
-    """Where a design's frame goes so that all of it, marks too, is in the middle of the box
-    with its top at top."""
-    left, y, right, _ = box(np.maximum(text, red))
-    return round(WIDTH / 2 - (left + right) / 2), top - y
+def placed(text, red, top):
+    """Where a design's frame goes so that all of it, marks too, is in the middle of the box with
+    its topmost ink at top; and where its ink's left and bottom end up."""
+    left, y, right, bottom = box(np.maximum(text, red))
+    shift = (round(WIDTH / 2 - (left + right) / 2), top - (y + PAD))
+    return shift, left + PAD + shift[0], bottom - PAD + shift[1]
+
+
+# The statement's lowest ink (the circle round "has"), in this box's pixels: just above it. The
+# gap from there to the first line here is the gap between the two lines here too.
+src = (ROOT / "app/statement.ts").read_text()
+statement = json.loads(src[src.index("= {\n") + 2 : src.rindex(";")])
+inked = statement["lines"] + statement["marks"]
+STATEMENT_BOTTOM = max(l["y"] + l["height"] for l in inked) - PAD - statement["height"]
+# Its leftmost ink, where the page shows it: centered like these (app/scroll-text.tsx moves it).
+left, right = min(l["x"] for l in inked) + PAD, max(l["x"] + l["width"] for l in inked) - PAD
+STATEMENT_LEFT = left + WIDTH / 2 - (left + right) / 2
+STATEMENT_RIGHT = right + WIDTH / 2 - (left + right) / 2
+TEKST_2_TOP = 478
+GAP = TEKST_2_TOP - STATEMENT_BOTTOM
 
 
 def beat(layers, next_at):
@@ -223,27 +238,46 @@ def handoff(start, layers):
     return start + (end - start) * HANDOFF
 
 
-# "But their Work / Feels...": the arrow comes down from the end of the statement, the first
-# line rises, the second right after, and the pen rings "Work" last.
+# "But their Work Feels...": the arrow comes down from the end of the statement to the end of
+# this line, "But their Work" rises, "Feels..." right after, and the pen rings "Work" last. One
+# line: "Feels..." moved up beside "Work", on its baseline, a word space after it (as between
+# "But" and "their"), so its F sits over the ring's right side, the ring running behind.
 text, red = design("tekst_2")
 RING = [(2407, 1154), (2320, 1158), (2250, 1148), (2205, 1120), (2178, 1080), (2187, 1045), (2219, 1016), (2279, 986),
         (2359, 961), (2449, 946), (2539, 941), (2619, 951), (2689, 971), (2744, 1006), (2767, 1046), (2757, 1086),
         (2724, 1131), (2669, 1171), (2599, 1199), (2519, 1213), (2439, 1216), (2369, 1211), (2309, 1201), (2281, 1191), (2276, 1181)]
-shift = centered(text, red, 470)
-pointer = arrow([(3420, 14), (3482, 150), (3470, 300), (3350, 450), (3080, 570), (2760, 635), (2530, 650)], "story-arrow-1", 0)
+cols = lambda a: np.nonzero((a > 0.5).any(axis=0))[0]
+rows = lambda a: np.nonzero((a > 0.5).any(axis=1))[0]
+first, feels = cut(text, bottom=1146), cut(text, top=1146)
+text = first + np.roll(feels, (rows(first).max() - rows(feels).max(), cols(first).max() + 39 - cols(feels).min()), axis=(0, 1))
+split = cols(first).max() + 20
+shift, tekst_2_left, tekst_2_bottom = placed(text, red, TEKST_2_TOP)
+tekst_2_right = cols(np.maximum(text, red)).max() + shift[0]
+middle = (rows(first).min() + rows(first).max()) / 2 + shift[1]  # of the letters
+tip = (tekst_2_right + 120, middle)  # a little short of its end
+pointer = arrow([(3380, 14), (3392, 140), (3380, 300), (3285, 440), (3110, 545), (tip[0] + 120, tip[1] - 8), tip], "story-arrow-1", 0)
 start = pointer["duration"] * HANDOFF
 words = [
     ring(red, "story-ring", shift, start + 0.2, RING, 0.3),  # under the letters, so first in the stack
-    line(cut(text, bottom=1146), "story-2-line-1", shift, start),
-    line(cut(text, top=1146), "story-2-line-2", shift, start + 0.08),
+    line(cut(text, right=split), "story-2-line-1", shift, start),
+    line(cut(text, left=split), "story-2-line-2", shift, start + 0.08),
 ]
 second = beat([pointer, *words], handoff(start, words))
 
-# "Alive! & Unique": the arrow again, "Alive" rises, the pen flicks "!" and the underline,
-# "&" rises, and the pen writes "Unique" to finish it.
+# "Alive! & Unique": the arrow again, from the start of the line above in one loose swing out to
+# the left and round to the start of this one: "Alive", which rises, the pen flicks "!" and the
+# underline, "&" rises, and the pen writes "Unique" to finish it.
 text, red = design("tekst_3")
-shift = centered(text, red, 1130)
-pointer = arrow([(530, 800), (496, 900), (522, 1010), (620, 1120), (800, 1205), (1035, 1238)], "story-arrow-2", 0)
+shift, tekst_3_left, _ = placed(text, red, tekst_2_bottom + GAP)
+x, y = tekst_2_left - 85, middle + 40  # left of "But"
+tip_x, tip_y = tekst_3_left - 182, 1079 + shift[1]  # as far off "Alive"'s middle as the first arrow's tip is off its line
+# One cubic curve, so it bends all the way round like a hand's swing rather than going straight,
+# turning and going straight again: it leaves heading out left and a little down, and comes
+# into the tip from the left, just above.
+t = np.linspace(0, 1, 14)[:, None]
+ends = np.array([(x, y), (x - 560, y + 90), (tip_x - 720, tip_y - 10), (tip_x, tip_y)])
+swing = (1 - t) ** 3 * ends[0] + 3 * (1 - t) ** 2 * t * ends[1] + 3 * (1 - t) * t**2 * ends[2] + t**3 * ends[3]
+pointer = arrow([tuple(p) for p in swing], "story-arrow-2", 0, duration=0.42)
 start = pointer["duration"] * HANDOFF
 words = [
     line(cut(text, right=1965), "story-3-alive", shift, start),
@@ -253,6 +287,14 @@ words = [
     mark(cut(red, left=1995), "story-3-unique", shift, start + 0.34, 14000, 0.012),
 ]
 third = beat([pointer, *words], handoff(start, words))
+
+# A check: neither arrow reaches past the statement's width.
+for b in (second, third):
+    a = b["layers"][0]
+    ink = cols(np.array(Image.open(ROOT / f"public{a['src']}").getchannel("A")) / 255)
+    left, right = b["x"] + a["x"] + ink.min(), b["x"] + a["x"] + ink.max() + 1
+    assert STATEMENT_LEFT <= left and right <= STATEMENT_RIGHT, (a["src"], left, right, STATEMENT_LEFT, STATEMENT_RIGHT)
+    print(a["src"], "ink", left, right, "statement", STATEMENT_LEFT, STATEMENT_RIGHT)
 
 beats = [second, third]
 height = max(b["y"] + b["height"] for b in beats)
@@ -269,5 +311,6 @@ OUT.write_text(
     f"{json.dumps({'width': WIDTH, 'height': int(height), 'beats': beats}, indent=2)};\n"
 )
 print("story", WIDTH, height, [(b["x"], b["y"], b["width"], b["height"], b["next"]) for b in beats])
+print("gaps", GAP, (tekst_2_bottom + GAP) - tekst_2_bottom, "statement bottom", STATEMENT_BOTTOM, "tekst_2", TEKST_2_TOP, tekst_2_bottom, "left", tekst_2_left)
 for b in beats:
     print([(l["src"], l["at"], l.get("duration", LINE_TIME)) for l in b["layers"]])

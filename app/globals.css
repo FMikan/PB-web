@@ -848,3 +848,79 @@ html {
   width: 100%;
   height: 100%;
 }
+
+/* The fallen four: a still row near the bottom of the screen. The view sits 5svh - --ring-low
+   lower than the screen, so that comes off its bottom first. */
+.fallen {
+  position: absolute;
+  left: 50%;
+  bottom: calc(5svh - var(--ring-low) + 2.5rem);
+  translate: -50% 0;
+  isolation: isolate; /* a glow goes behind all four, over the page */
+  display: flex;
+  gap: clamp(0.75rem, 1.6vw, 1.75rem);
+}
+
+.fallen-logo {
+  position: relative;
+  width: clamp(2.75rem, 4.5vw, 5rem);
+  aspect-ratio: 1;
+}
+
+/* Pointed at, the front logo of the ring (data-lit, app/orbit-slider.tsx: in 3D :hover doesn't
+   reach it) and the fallen ones grow a little in a glow: white,
+   wider than tall, and not a smooth blur but fine horizontal lines, like light on an old screen
+   (docs/ss/image copy 16.png). The lines are screen pixels: 2 lit, 2 faint. */
+.panel::before,
+.fallen-logo::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -40% -85%;
+  /* Brightest just outside the logo's edge (at 37-55% of the way out, in these boxes). */
+  background: radial-gradient(
+    closest-side,
+    rgb(255 255 255 / 0.85) 50%,
+    rgb(255 255 255 / 0.4) 70%,
+    rgb(255 255 255 / 0.12) 87%,
+    transparent
+  );
+  mask-image: repeating-linear-gradient(#000 0 2px, rgb(0 0 0 / 0.25) 2px 4px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Only as wide as the gap to its neighbors in the ring, which are behind it. */
+.panel::before {
+  inset: -40% -60%;
+}
+
+.panel[data-lit]::before {
+  opacity: 1;
+}
+
+.panel[data-lit] img {
+  scale: 1.06;
+}
+
+@media (hover: hover) {
+  .fallen-logo:hover::before {
+    opacity: 1;
+  }
+
+  .fallen-logo:hover img {
+    scale: 1.15;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel::before,
+  .fallen-logo::before {
+    transition: opacity 0.35s;
+  }
+
+  .panel img,
+  .fallen-logo img {
+    transition: scale 0.45s var(--menu-ease);
+  }
+}
