@@ -31,11 +31,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${benzin.variable} h-full antialiased overscroll-none`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col pt-(--header-h)">
         <Loader />
         <AmbientLight />
-        <header className="flex h-(--header-h) items-center justify-between px-4 pt-6 md:px-14 md:pt-15">
-          <Image src="/logo.png" alt="Point Blank" width={480} height={180} preload className="h-8 w-auto" />
+        {/* Only what's in it takes the pointer, so the page under the rest of the bar still does. */}
+        <header className="site-header pointer-events-none fixed inset-x-0 top-0 z-50 flex h-(--header-h) items-center justify-between px-4 pt-6 md:px-14 md:pt-15 [&>*]:pointer-events-auto">
+          {/* A plain link: next/link does nothing on a second click, with the URL already at #top.
+              ponytail: one page for now; with more routes this should lead home, not up this one. */}
+          <a href="#top">
+            <Image src="/logo.png" alt="Point Blank" width={480} height={180} preload className="h-8 w-auto" />
+          </a>
           <Menu />
         </header>
         {children}

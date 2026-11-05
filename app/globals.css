@@ -30,6 +30,38 @@ body {
 html {
   scrollbar-width: none;
 }
+
+/* The logo in the top bar glides back to the top. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* The top bar's blur: comes in over the first bit of scrolling, as nothing's behind it before
+   that, and fades out at its bottom edge so it has no hard line. Where the browser can't tie
+   it to the scroll it's just always on. */
+.site-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  backdrop-filter: blur(10px);
+  mask-image: linear-gradient(#000 55%, transparent);
+  pointer-events: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  .site-header::before {
+    animation: header-blur linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 80px;
+  }
+}
+
+@keyframes header-blur {
+  from { opacity: 0; }
+}
 html::-webkit-scrollbar {
   display: none;
 }
@@ -238,7 +270,7 @@ html, a, button {
   opacity: 0;
 }
 
-/* The statement's lines rise into place from behind their own bottom edge: moved down
+/* The statement's and story's lines rise into place from behind their own bottom edge: moved down
    a full line and clipped by as much, so what shows stops at the line's slot. At rest
    the clip is the whole line, not none, so the two can be animated between. */
 .statement-line {
@@ -260,8 +292,8 @@ html, a, button {
 
   [data-reveal="in"] .statement-line {
     transition:
-      translate 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--delay),
-      clip-path 0.9s cubic-bezier(0.16, 1, 0.3, 1) var(--delay);
+      translate 0.6s cubic-bezier(0.16, 1, 0.3, 1) var(--delay),
+      clip-path 0.6s cubic-bezier(0.16, 1, 0.3, 1) var(--delay);
   }
 }
 
@@ -760,14 +792,20 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
    screens let the two ends run off the sides).
    .slider is a tall track that .slider-view stays on screen through. Each .slider-stop at
    the top of the screen is one logo in the middle, and the scroll settles on one: proximity,
-   so the rest of the page scrolls as ever. */
+   so the rest of the page scrolls as ever. The last stop is the end of the page.
+   --ring-low is how far the ring looks below its own middle, as its front logo is the largest
+   and lowest: the view moves up by that, which puts the ring right in the middle of the screen,
+   then down 5% of a screen, where it's meant to sit. The margin takes the first back and pulls
+   the whole track up 15% of a screen, into the gap under the text. */
 html {
   scroll-snap-type: y proximity;
 }
 
 .slider {
   --logo: clamp(6rem, 18vw, 26rem);
+  --ring-low: calc(var(--logo) * 0.154);
   position: relative;
+  margin-top: calc(var(--ring-low) - 15svh);
 }
 
 .slider-view {
@@ -776,6 +814,7 @@ html {
   height: 100svh;
   margin-bottom: -100svh; /* the stops run from the track's top, behind it */
   overflow: hidden;
+  transform: translateY(calc(5svh - var(--ring-low)));
 }
 
 .slider-stop {
