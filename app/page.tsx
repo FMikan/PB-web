@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import OrbitSlider from "./orbit-slider";
 import ScrollText from "./scroll-text";
 
 export default function Home() {
@@ -49,6 +50,7 @@ export default function Home() {
         </div>
       </main>
       <ScrollText />
+      <OrbitSlider />
     </>
   );
 }

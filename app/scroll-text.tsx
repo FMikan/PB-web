@@ -9,14 +9,16 @@ import { STATEMENT, type Mark } from "./statement";
 // its red pen marks recolored pink. It comes in once, when it shows up on screen (not
 // following the scroll): the two lines rise into place one after the other, then a pen
 // writes "1%" and circles "has", like the swoosh in the header. Scrolling past drifts
-// the page background from the hero's navy through purple toward pink.
+// the page background from the hero's navy through purple toward pink, and on to a
+// midnight dark blue as the orbit slider below comes in.
 
 // Page background along the way (0 = this section's top at the bottom of the screen,
-// 1 = its bottom there, the end of the page).
+// 1 = its bottom there, 2 = the slider below it filling the screen).
 const STOPS: [number, number[]][] = [
   [0, [0x12, 0x13, 0x24]], // --background, the hero's navy
   [0.4, [0x1b, 0x15, 0x32]], // purple
   [1, [0x23, 0x15, 0x2d]], // toward pink, only about halfway from the purple
+  [2, [0x07, 0x0b, 0x26]], // midnight dark blue
 ];
 
 const clamp = (x: number) => Math.min(Math.max(x, 0), 1);
@@ -49,7 +51,8 @@ export default function ScrollText() {
     const update = () => {
       frame = 0;
       const { top, height } = section.getBoundingClientRect();
-      setPageBackground(colorAt(clamp((innerHeight - top) / height)));
+      const below = section.nextElementSibling!.getBoundingClientRect();
+      setPageBackground(colorAt(clamp((innerHeight - top) / height) + clamp((innerHeight - below.top) / innerHeight)));
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -91,7 +94,7 @@ export default function ScrollText() {
   return (
     // md+: 12svh above the statement puts it about 30% as far below the VSL as the text
     // used to sit (centered in a screen of its own). Phones: right under the hero, whose
-    // bottom holds the scroll hint. The bottom padding is the end of the page for now.
+    // bottom holds the scroll hint. The bottom padding is the gap above the orbit slider.
     <section ref={ref} className="px-4 pt-8 pb-24 md:px-14 md:pt-[12svh] md:pb-[12svh]">
       <p className="sr-only">Artists of old didn’t have 1% of the tools that everyone has access to today...</p>
       {/* The design, layer by layer (scripts/statement-layers.py, app/statement.ts): its

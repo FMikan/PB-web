@@ -372,6 +372,7 @@ html, a, button {
   --menu-panel: 100vw;
   --menu-gutter: 1rem;
   --menu-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --menu-ease-in: cubic-bezier(0.55, 0, 0.85, 0.2); /* the way out: moving early enough to be seen */
   --menu-swing: cubic-bezier(0.3, 1.3, 0.5, 1); /* the barrel overshoots a little, then settles */
   --menu-pink: #ffb2c6;
   --menu-lilac: #ccc2f5;
@@ -408,6 +409,14 @@ html, a, button {
   background: transparent;
 }
 
+.menu[data-closing] {
+  pointer-events: none;
+}
+
+.menu[data-closing] :is(a, button):focus-visible {
+  outline: none;
+}
+
 .menu :is(a, button):focus-visible {
   outline: 2px solid var(--menu-pink);
   outline-offset: 4px;
@@ -434,14 +443,15 @@ html, a, button {
   width: var(--menu-panel);
   flex-direction: column;
   gap: 2rem;
+  overflow-x: hidden; /* the panel's own edge is what the links slide in and out past */
   overflow-y: auto;
-  padding: calc(var(--header-h) + 2rem) var(--menu-gutter) 1.5rem 1rem;
+  padding: calc(var(--header-h) + 2rem) var(--menu-gutter) 2.5rem 1rem;
   background: linear-gradient(189deg, #1f1f38 0.55%, #18182d 30.38%, #111222 65.19%, #0c0d1b 100%);
 }
 
 @media (width >= 48rem) {
   .menu-panel {
-    padding: calc(var(--header-h) + 1.5rem) var(--menu-gutter) 2.5rem 3rem;
+    padding: calc(var(--header-h) + 1.5rem) var(--menu-gutter) calc(var(--header-h) + 1.5rem) 3rem;
   }
 }
 
@@ -469,8 +479,7 @@ html, a, button {
   rotate: -45deg;
 }
 
-/* One link: the bullet hole on the left, in the room the word moves over for. Aimed at,
-   the word makes way for the laser; hit, for the hole too. */
+/* One link. Aimed at, the word makes way for the laser. */
 .menu-link {
   position: relative;
   display: flex;
@@ -498,10 +507,6 @@ html, a, button {
   translate: 1.5rem 0;
 }
 
-.menu-link[data-hit] .menu-word {
-  translate: 2.75rem 0;
-}
-
 .menu-link[data-aim] .menu-word {
   color: var(--menu-pink);
 }
@@ -510,38 +515,19 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
   color: rgb(204 194 245 / 0.45);
 }
 
-/* Also what the barrel aims at, so it's measured even while it's invisible. */
-.menu-hole {
+/* What the barrel aims at, in the room the word moves over for. */
+.menu-spot {
   position: absolute;
   top: 50%;
   left: 0;
   width: 2rem;
   height: 2rem;
   margin-top: -1rem;
-  fill: none;
-  stroke-linecap: round;
   pointer-events: none;
-  stroke: rgb(255 255 255 / 0.55);
-  stroke-width: 0.8;
-  opacity: 0;
 }
 
-.menu-hole circle {
-  fill: #05060d;
-  stroke: #fff;
-  stroke-width: 1.2;
-}
-
-.menu-link[data-hit] .menu-hole {
-  opacity: 1;
-}
-
-@keyframes menu-hit {
-  from { scale: 1.7; }
-}
-
-/* The line: in the markup twice, over the socials on phones and under the pistol on md+,
-   and only one of the two renders. */
+/* The line: in the markup twice, at the panel's bottom on phones and under the pistol on
+   md+, and only one of the two renders. */
 .menu-pitch {
   font-family: var(--font-benzin);
   font-size: 1.125rem;
@@ -564,26 +550,6 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
     position: absolute;
     bottom: 2.5rem;
     left: var(--menu-gutter);
-  }
-}
-
-.menu-socials {
-  display: flex;
-  gap: 1.5rem;
-  font-size: 0.875rem;
-  color: #e5ddff;
-}
-
-.menu-socials a {
-  display: block;
-  padding-block: 0.75rem;
-  background: linear-gradient(currentcolor, currentcolor) 0 calc(100% - 0.625rem) / 100% 1px no-repeat;
-  background-size: 0 1px;
-}
-
-@media (hover: hover) {
-  .menu-socials a:hover {
-    background-size: 100% 1px;
   }
 }
 
@@ -625,7 +591,6 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
 
 /* All of these start at the muzzle: the right edge, on the barrel's line. */
 .menu-laser,
-.menu-splash,
 .menu-round {
   position: absolute;
   top: 11.91%;
@@ -641,23 +606,6 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
   background: linear-gradient(90deg, rgb(255 178 198 / 0.1), var(--menu-pink) 40%);
   transform-origin: 0 50%;
   scale: 0 1;
-}
-
-/* The splash: three layers centered on the muzzle, each scaling out from it, so they only
-   composite. The minimum keeps it visible on the phones' small pistol. */
-.menu-splash {
-  width: max(40%, 5.5rem);
-  aspect-ratio: 1;
-  overflow: visible;
-  fill: var(--menu-pink);
-  opacity: 0;
-  translate: -50% -50%;
-}
-
-.menu-ring {
-  fill: none;
-  stroke: var(--menu-pink);
-  stroke-width: 2.5;
 }
 
 .menu-round {
@@ -684,14 +632,6 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
     transition: translate 0.45s var(--menu-ease), color 0.2s;
   }
 
-  .menu-link[data-hit] .menu-hole {
-    animation: menu-hit 0.3s var(--menu-ease);
-  }
-
-  .menu-socials a {
-    transition: background-size 0.45s var(--menu-ease);
-  }
-
   .menu-stage {
     transition: opacity 0.4s;
   }
@@ -713,7 +653,8 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
     }
   }
 
-  /* The links rise from behind their own row's bottom edge, one after the other. */
+  /* The links come in right to left, one after the other, from just past the panel's edge:
+     their own width and the gutter. */
   .menu-link {
     transition: translate 0.8s var(--menu-ease) calc(0.16s + var(--i) * 0.06s);
   }
@@ -747,7 +688,7 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
       translate: 0 0.4375rem;
     }
     .menu[open] .menu-link {
-      translate: 0 115%;
+      translate: calc(100% + var(--menu-gutter)) 0;
     }
     .menu[open] .menu-late {
       opacity: 0;
@@ -760,35 +701,111 @@ ul:has(> li > [data-aim]) .menu-link:not([data-aim]) .menu-word {
     }
   }
 
-  /* Out is quicker than in, and everything leaves together. */
-  .menu[data-closing] .menu-stage {
+  /* The way out is the way in played backward, one group at a time. The laser drops back
+     into the muzzle and the pistol swings away the way it came. Then the links leave left to
+     right past the panel's edge, the last one first. Then the line goes, the panel slides
+     off, the backdrop fades and the X uncrosses into the burger waiting under it. */
+  .menu[data-closing] .menu-laser {
+    transition: scale 0.15s var(--menu-ease-in);
+  }
+
+  .menu[data-closing] .menu-gun {
     opacity: 0;
-    transition: opacity 0.3s 0.05s;
+    translate: -14% 0;
+    rotate: 12deg;
+    transition: rotate 0.46s var(--menu-ease-in), translate 0.46s var(--menu-ease-in), opacity 0.18s 0.28s;
+  }
+
+  .menu[data-closing] .menu-link {
+    translate: calc(100% + var(--menu-gutter)) 0;
+    transition: translate 0.26s var(--menu-ease-in) calc(0.26s + var(--from-last) * 0.03s);
+  }
+
+  .menu[data-closing] .menu-late {
+    opacity: 0;
+    translate: 0 0.75rem;
+    transition: opacity 0.2s 0.46s, translate 0.24s var(--menu-ease-in) 0.46s;
   }
 
   .menu[data-closing] .menu-panel {
     translate: 100% 0;
-    transition: translate 0.35s cubic-bezier(0.7, 0, 0.84, 0);
+    transition: translate 0.3s var(--menu-ease-in) 0.56s;
+  }
+
+  .menu[data-closing] .menu-stage {
+    opacity: 0;
+    transition: opacity 0.28s 0.64s;
+  }
+
+  .menu[data-closing] .menu-close {
+    rotate: 0deg;
   }
 
   .menu[data-closing] .menu-close span {
     translate: 0 -0.4375rem;
     rotate: 0deg;
-    transition-duration: 0.3s;
+    transition-duration: 0.28s;
+    transition-delay: 0.62s;
   }
 
   .menu[data-closing] .menu-close span:last-child {
     translate: 0 0.4375rem;
   }
+}
 
-  .menu[data-closing] .menu-gun {
-    opacity: 0;
-    translate: -8% 0;
-    transition: translate 0.3s cubic-bezier(0.7, 0, 0.84, 0), opacity 0.25s;
-  }
+/* 3D orbit slider (app/orbit-slider.tsx), after docs/reference_comp/and2es-3d-slider. No
+   background of its own: the page's (and its light, app/ambient-light.tsx) shows through.
+   .panel is one logo, the .orbit's size. --logo is the only size to set: the component
+   works in logo widths, so the ring scales with it (at 18vw it fills the width, smaller
+   screens let the two ends run off the sides).
+   .slider is a tall track that .slider-view stays on screen through. Each .slider-stop at
+   the top of the screen is one logo in the middle, and the scroll settles on one: proximity,
+   so the rest of the page scrolls as ever. */
+html {
+  scroll-snap-type: y proximity;
+}
 
-  .menu[data-closing] .menu-late {
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
+.slider {
+  --logo: clamp(6rem, 18vw, 26rem);
+  position: relative;
+}
+
+.slider-view {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  margin-bottom: -100svh; /* the stops run from the track's top, behind it */
+  overflow: hidden;
+}
+
+.slider-stop {
+  height: 190px; /* how much scrolling brings on the next logo: one wheel notch past halfway */
+  scroll-snap-align: start;
+}
+
+.slider-stop:last-child {
+  height: 100svh;
+}
+
+.stage {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+.orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--logo);
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+}
+
+.panel {
+  position: absolute;
+  width: 100%;
+  height: 100%;
 }
